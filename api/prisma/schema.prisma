@@ -1,0 +1,119 @@
+// Prisma schema for the procurement intake API.
+// This is a direct translation of src/lib/schema.ts on the frontend, so the
+// two stay in sync conceptually. Facts (the TPRM answers) are stored as a
+// single JSON column rather than a fully normalized case_facts table for now
+// — that's an intentional simplification; it can be split into its own
+// table later if you need to query individual facts across cases.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StageStatus {
+  skipped
+  pending
+  active
+  inProgress
+  completed
+}
+
+enum AssessmentStatus {
+  pending
+  inProgress
+  completed
+}
+
+enum OverallStatus {
+  new
+  inProgress
+  completed
+}
+
+model Team {
+  id      Int          @id @default(autoincrement())
+  name    String       @unique // e.g. "Privacy", "PVM", "Business Architecture"
+  members TeamMember[]
+}
+
+model TeamMember {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  teamId Int
+  user   User   @relation(fields: [userId], references: [id])
+  team   Team   @relation(fields: [teamId], references: [id])
+
+  @@unique([userId, teamId])
+}
+
+model User {
+  id        Int          @id @default(autoincrement())
+  name      String
+  email     String       @unique
+  azureObjectId String?  @unique // MSAL's homeAccountId / Entra ID object ID, once SSO is fully wired to the DB
+  role      String       @default("team_member") // "business_owner" | "team_member" | "admin"
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  memberOf  TeamMember[]
+}
+
+model Case {
+  id          String   @id @default(cuid())
+  caseNumber  String   @unique // display id, e.g. "#3001"
+  vendorName  String
+  description String
+  businessOwner    String
+  businessSponsor  String
+  supplier         String
+  arrangementType  String
+  businessLines    String
+  riskTier    String? // "Tier 1" | "Tier 2" | "Tier 3"
+  criticality String?
+
+  facts Json // CaseFacts blob parsed from the TPRM workbook
+
+  sharepointFolderUrl String?
+  tprmFileUrl         String?
+
+  overallStatus OverallStatus @default(new)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stages      CaseStage[]
+  assessments CaseAssessment[]
+}
+
+model CaseStage {
+  id          Int         @id @default(autoincrement())
+  caseId      String
+  case        Case        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  stageKey    String // e.g. "pvm-intake", "risk-signoff"
+  label       String
+  team        String
+  seqOrder    Int
+  status      StageStatus @default(pending)
+  activatedAt DateTime?
+  completedAt DateTime?
+  completedBy String?
+
+  @@unique([caseId, stageKey])
+}
+
+model CaseAssessment {
+  id     Int              @id @default(autoincrement())
+  caseId String
+  case   Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  key    String // "PIA" | "DataAIImpactAssessment"
+  label  String
+  status AssessmentStatus @default(pending)
+  fileUrl String?
+  applicable Boolean @default(false) // whether THIS case's TPRM answers actually require it
+  note   String?
+
+  @@unique([caseId, key])
+}
