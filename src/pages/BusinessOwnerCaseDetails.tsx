@@ -3,7 +3,7 @@ import DescriptionCard from "../components/DescriptionCard";
 import AssessmentSection from "../components/AssessmentSection";
 import StageProgressTracker from "../components/StageProgressTracker";
 import { Case } from "../lib/schema";
-import { currentStateLabel, assessmentsToCompleteList, completedFormsAndAssessments, notApplicableAssessments } from "../lib/boViewHelpers";
+import { currentStateLabel, assessmentsToCompleteList, completedFormsAndAssessments, requiresUpGuard } from "../lib/boViewHelpers";
 import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
 
 interface BusinessOwnerCaseDetailsProps {
@@ -12,7 +12,8 @@ interface BusinessOwnerCaseDetailsProps {
 }
 
 export default function BusinessOwnerCaseDetails({ case: c, onBack }: BusinessOwnerCaseDetailsProps) {
-  const assessmentsToComplete = [...assessmentsToCompleteList(c), ...notApplicableAssessments(c)];
+  const assessmentsToComplete = assessmentsToCompleteList(c);
+  const needsUpGuard = requiresUpGuard(c);
 
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
@@ -65,10 +66,40 @@ export default function BusinessOwnerCaseDetails({ case: c, onBack }: BusinessOw
           </a>
         </div>
       )}
-      <div style={{ display: "flex", gap: 24, padding: "8px 32px 0", alignItems: "flex-start", flexWrap: "wrap" }}>
+
+      {/* UpGuard Security Assessment notice — only shown when Security Governance is triggered */}
+      {needsUpGuard && (
+        <div style={{ margin: "12px 32px 0" }}>
+          <div style={{
+            background: "#fffbeb",
+            border: "1.5px solid #f59e0b",
+            borderRadius: 10,
+            padding: "14px 18px",
+            display: "flex",
+            gap: 12,
+            alignItems: "flex-start",
+          }}>
+            <span style={{ fontSize: 22, lineHeight: 1 }}>🛡️</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>
+                UpGuard Security Assessment Required
+              </div>
+              <div style={{ fontSize: 13, color: "#78350f", lineHeight: 1.6 }}>
+                Based on the TPRM answers, this vendor requires an <strong>UpGuard security assessment</strong>.
+                Please contact the <strong>Security Governance team</strong> to initiate the assessment.
+                The review cannot be considered complete until this is done.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 24, padding: "16px 32px 0", alignItems: "flex-start", flexWrap: "wrap" }}>
         <DescriptionCard text={c.description} />
         <AssessmentSection title="Completed Forms / Assessments" items={completedFormsAndAssessments(c)} columns={2} />
-        <AssessmentSection title="Assessments To Be Completed" items={assessmentsToComplete} columns={2} />
+        {assessmentsToComplete.length > 0 && (
+          <AssessmentSection title="Assessments To Be Completed" items={assessmentsToComplete} columns={2} />
+        )}
       </div>
       {assessmentsToComplete.length > 0 && (
         <div style={{ padding: "8px 32px 24px", fontSize: 12, color: "#64748b" }}>
