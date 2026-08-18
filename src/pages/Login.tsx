@@ -63,6 +63,19 @@ export default function Login({ onSuccess }: Props) {
     setPhase("chooseRole");
   }
 
+   function handleDemoLogin(role: UserRole) {
+    const demoId = role === "businessOwner" ? "demo-bo-001" : "demo-team-001";
+    const profile: UserProfile = {
+      accountId: demoId,
+      name: role === "businessOwner" ? "Demo Business Owner" : "Demo Team Member",
+      email: "demo@greenshield.ca",
+      role,
+      ...(role === "team" ? { team: { id: 1, name: "Legal", memberCount: 3 } } : {}),
+    };
+    setAuthUser(profile);
+    onSuccess(profile, false);
+  }
+
   async function handleSignInClick() {
     setPhase("signingIn");
     setError("");
