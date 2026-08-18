@@ -15,8 +15,8 @@ import { Configuration, LogLevel } from "@azure/msal-browser";
 //     enough to read the signed-in person's name/email; no admin consent
 //     needed for this one, delegated User.Read is pre-consented by default)
 
-export const MSAL_CLIENT_ID = import.meta.env.VITE_MSAL_CLIENT_ID ?? "REPLACE_WITH_SIGNIN_APP_CLIENT_ID";
-export const MSAL_TENANT_ID = import.meta.env.VITE_MSAL_TENANT_ID ?? "REPLACE_WITH_YOUR_TENANT_ID";
+export const MSAL_CLIENT_ID = import.meta.env.VITE_MSAL_CLIENT_ID ?? "00000000-0000-0000-0000-000000000000";
+export const MSAL_TENANT_ID = import.meta.env.VITE_MSAL_TENANT_ID ?? "common";
 
 export const msalConfig: Configuration = {
   auth: {
