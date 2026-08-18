@@ -4,8 +4,8 @@ import { CaseFacts } from "./schema";
 // ─── TPRM workbook parser ───────────────────────────────────────────────────
 // Reads the real .xlsx a Business Owner uploads, entirely in the browser
 // (no server needed for this). Looks up values by matching the label text
-// GreenShield uses in the workbook rather than hardcoded cell refs, so it
-// keeps working even if a row shifts by a line or two.
+// used in the workbook rather than hardcoded cell refs, so it keeps working
+// even if a row shifts by a line or two.
 //
 // Sheets read:
 //   "00 Start Here"            → legal name, arrangement type, description,
@@ -47,7 +47,6 @@ function findValueByLabel(grid: SheetGrid, labelSubstring: string): string | und
 function findResponseByCategory(grid: SheetGrid, categorySubstring: string): string | undefined {
   const needle = normalize(categorySubstring);
   for (const row of grid) {
-    // Category is typically column index 1 (B), Response is column index 3 (D).
     const categoryCell = row[1];
     if (categoryCell !== undefined && normalize(categoryCell).includes(needle)) {
       const response = row[3];
@@ -71,7 +70,8 @@ function normalizeRiskTier(raw: string | undefined): CaseFacts["riskTier"] | und
 
 export async function parseTprmWorkbook(file: File): Promise<CaseFacts> {
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array" });
+  // Use Uint8Array — more compatible across bundlers than passing ArrayBuffer directly
+  const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
 
   const startHere = sheetToGrid(workbook, "00 Start Here");
   const legalName = findValueByLabel(startHere, "Legal name of third-party");
