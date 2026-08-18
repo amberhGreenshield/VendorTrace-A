@@ -7,11 +7,11 @@ import { currentStateLabel, assessmentsToCompleteList, completedFormsAndAssessme
 import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
 
 interface BusinessOwnerCaseDetailsProps {
-  case: Case;
+  case_: Case;
   onBack: () => void;
 }
 
-export default function BusinessOwnerCaseDetails({ case: c, onBack }: BusinessOwnerCaseDetailsProps) {
+export default function BusinessOwnerCaseDetails({ case_: c, onBack }: BusinessOwnerCaseDetailsProps) {
   const assessmentsToComplete = assessmentsToCompleteList(c);
   const needsUpGuard = requiresUpGuard(c);
 
