@@ -41,10 +41,39 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
           ) : null
         )}
       </div>
+
+      {/* UpGuard Security Assessment notice — only shown when Security Governance is triggered */}
+      {c.requiresUpGuard && (
+        <div style={{ margin: "16px 32px 0" }}>
+          <div style={{
+            background: "#fffbeb",
+            border: "1.5px solid #f59e0b",
+            borderRadius: 10,
+            padding: "14px 18px",
+            display: "flex",
+            gap: 12,
+            alignItems: "flex-start",
+          }}>
+            <span style={{ fontSize: 22, lineHeight: 1 }}>🛡️</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>
+                UpGuard Security Assessment Required
+              </div>
+              <div style={{ fontSize: 13, color: "#78350f", lineHeight: 1.6 }}>
+                This vendor requires an <strong>UpGuard security assessment</strong> based on the TPRM intake answers.
+                Please contact the <strong>Security Governance team</strong> to initiate this before the case is marked complete.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 24, padding: "20px 32px", alignItems: "flex-start", flexWrap: "wrap" }}>
         <DescriptionCard text={c.description} />
-        <AssessmentSection title="Completed Forms/Assessments" items={c.completedForms} columns={2} />
-        <AssessmentSection title="Data, AI & Privacy Assessments" items={c.ourAssessments} columns={2} />
+        <AssessmentSection title="Completed Forms / Assessments" items={c.completedForms} columns={2} />
+        {c.ourAssessments.length > 0 && (
+          <AssessmentSection title="Required Assessments" items={c.ourAssessments} columns={2} />
+        )}
       </div>
       {(c.stage === "new" || c.stage === "inProgress") && (
         <div style={{ padding: "0 32px 24px" }}>
