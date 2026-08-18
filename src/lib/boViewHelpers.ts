@@ -7,6 +7,7 @@ export function currentStateLabel(c: Case): string {
   return team ? `With ${TEAM_LABELS[team]}` : "Submitted";
 }
 
+/** Only assessments that are actually required for this case and not yet done. */
 export function assessmentsToCompleteList(c: Case): CompletedForm[] {
   return c.assessments
     .filter((a) => a.applicable && a.status !== "completed")
@@ -15,14 +16,12 @@ export function assessmentsToCompleteList(c: Case): CompletedForm[] {
 
 export function completedFormsAndAssessments(c: Case): CompletedForm[] {
   const completedAssessments = c.assessments
-    .filter((a) => a.status === "completed")
+    .filter((a) => a.applicable && a.status === "completed")
     .map((a) => ({ id: a.key, label: a.label, fileUrl: a.fileUrl }));
   return [...c.completedForms, ...completedAssessments];
 }
 
-/** PIA / Data & AI links that aren't required for this case — kept visible as reference links rather than hidden. */
-export function notApplicableAssessments(c: Case): CompletedForm[] {
-  return c.assessments
-    .filter((a) => !a.applicable)
-    .map((a) => ({ id: a.key, label: a.label, fileUrl: a.fileUrl, note: "Not required for this case — shown for visibility" }));
+/** Returns true if this case requires a Security Governance / UpGuard assessment. */
+export function requiresUpGuard(c: Case): boolean {
+  return c.stages.some((s) => s.team === "SecurityGovernance");
 }
