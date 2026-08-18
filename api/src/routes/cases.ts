@@ -11,8 +11,6 @@ import { AssessmentKey, TEAM_LABELS, TeamKey } from "../domain/schema.js";
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 export const casesRouter = Router();
 
-let caseNumberCounter = 3000;
-
 // GET /api/cases — all cases (optionally filter by team or businessOwner)
 casesRouter.get("/", async (req, res) => {
   const { team, businessOwner } = req.query;
