@@ -14,11 +14,13 @@ export interface TeamViewCase {
   description?: string;
   completedForms: CompletedForm[];
   /**
-   * PIA + Data & AI Impact Assessment links for this case, always present
-   * (even when not applicable/required) so any team can open the live
-   * SharePoint document, not just the team that owns it.
+   * Only assessments that are actually required (applicable) for this case.
+   * Non-applicable assessments are hidden — they are not required and showing
+   * them as links causes confusion.
    */
   ourAssessments: CompletedForm[];
+  /** True if the case triggered the Security Governance team (UpGuard required). */
+  requiresUpGuard: boolean;
   businessOwner?: string;
   businessSponsor?: string;
   supplier?: string;
@@ -49,16 +51,15 @@ export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
     const legacyStage: LegacyStage =
       stage.status === "completed" ? "completed" : stage.status === "inProgress" ? "inProgress" : "new";
 
-    // Every team gets links to both assessments, whether or not they own
-    // them, so anyone reviewing a case can see the PIA / Data & AI Impact
-    // Assessment status in real time — even if it's still blank because
-    // this case doesn't require it.
-    const ourAssessments = c.assessments.map((a) => ({
-      id: a.key,
-      label: a.label,
-      fileUrl: a.fileUrl,
-      note: a.applicable ? undefined : "Not required for this case — shown for visibility",
-    }));
+    // Only show assessments that are actually required for this case.
+    // Non-applicable assessments are hidden to avoid confusion.
+    const ourAssessments = c.assessments
+      .filter((a) => a.applicable)
+      .map((a) => ({
+        id: a.key,
+        label: a.label,
+        fileUrl: a.fileUrl,
+      }));
 
     results.push({
       id: c.id,
@@ -70,6 +71,7 @@ export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
       description: c.description,
       completedForms: c.completedForms,
       ourAssessments,
+      requiresUpGuard: c.stages.some((s) => s.team === "SecurityGovernance"),
       businessOwner: c.businessOwner,
       businessSponsor: c.businessSponsor,
       supplier: c.supplier,
