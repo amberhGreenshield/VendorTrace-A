@@ -11,6 +11,17 @@ import { AssessmentKey, TEAM_LABELS, TeamKey } from "../domain/schema.js";
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 export const casesRouter = Router();
 
+/** Always reads the DB to find the next safe case number — no in-memory counter that resets on restart. */
+async function nextCaseNumber(): Promise<string> {
+  const latest = await prisma.case.findFirst({
+    orderBy: { createdAt: "desc" },
+    select: { caseNumber: true },
+  });
+  if (!latest?.caseNumber) return "#3000";
+  const num = parseInt(latest.caseNumber.replace(/\D/g, ""), 10);
+  return `#${(isNaN(num) ? 3000 : num) + 1}`;
+}
+
 // GET /api/cases — all cases (optionally filter by team or businessOwner)
 casesRouter.get("/", async (req, res) => {
   const { team, businessOwner } = req.query;
@@ -62,7 +73,7 @@ casesRouter.post("/", upload.single("tprmFile"), async (req, res) => {
     );
 
     const firstActive = stages.find((s) => s.status === "active");
-    const caseNumber = `#${caseNumberCounter++}`;
+    const caseNumber = await nextCaseNumber();
 
     const created = await prisma.case.create({
       data: {
