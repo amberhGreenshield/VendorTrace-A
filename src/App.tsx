@@ -51,7 +51,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (authPage !== "app") return;F
+    if (authPage !== "app") return;
     return reloadCases();
   }, [authPage, reloadCases]);
 
