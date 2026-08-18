@@ -14,6 +14,14 @@ export function assessmentsToCompleteList(c: Case): CompletedForm[] {
     .map((a) => ({ id: a.key, label: a.label, fileUrl: a.fileUrl }));
 }
 
+/**
+ * @deprecated Returns [] — non-applicable assessments are now hidden entirely.
+ * Kept for backward compatibility while older files are being replaced.
+ */
+export function notApplicableAssessments(_c: Case): CompletedForm[] {
+  return [];
+}
+
 export function completedFormsAndAssessments(c: Case): CompletedForm[] {
   const completedAssessments = c.assessments
     .filter((a) => a.applicable && a.status === "completed")
