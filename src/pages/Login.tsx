@@ -19,12 +19,6 @@ export default function Login({ onSuccess }: Props) {
   const [role, setRole] = useState<UserRole | null>(null);
   const [error, setError] = useState("");
 
-  // On mount: if MSAL already has a signed-in account (either from a
-  // completed redirect, or a still-valid browser session), use it
-  // immediately. Otherwise try a SILENT sso check — this succeeds with NO
-  // visible UI if the person is already signed into Microsoft on this
-  // device (common on a managed work machine). Only if that fails do we
-  // show a real "Sign in with Microsoft" button.
   useEffect(() => {
     async function checkSso() {
       const existingAccount = accounts[0];
@@ -55,22 +49,20 @@ export default function Login({ onSuccess }: Props) {
       onSuccess(existingProfile, false);
       return;
     }
-    // Brand new person — we know who they are from Microsoft, just need
-    // their role (and then team, on the next screen).
     setPendingAccountId(accountId);
     setPendingName(name);
     setPendingEmail(email);
     setPhase("chooseRole");
   }
 
-   function handleDemoLogin(role: UserRole) {
-    const demoId = role === "businessOwner" ? "demo-bo-001" : "demo-team-001";
+  function handleDemoLogin(demoRole: UserRole) {
+    const demoId = demoRole === "businessOwner" ? "demo-bo-001" : "demo-team-001";
     const profile: UserProfile = {
       accountId: demoId,
-      name: role === "businessOwner" ? "Demo Business Owner" : "Demo Team Member",
-      email: "demo@greenshield.ca",
-      role,
-      ...(role === "team" ? { team: { id: 1, name: "Legal", memberCount: 3 } } : {}),
+      name: demoRole === "businessOwner" ? "Demo Business Owner" : "Demo Team Member",
+      email: "demo@vendortrace.ca",
+      role: demoRole,
+      ...(demoRole === "team" ? { team: { id: 1, name: "Legal", memberCount: 3 } } : {}),
     };
     setAuthUser(profile);
     onSuccess(profile, false);
@@ -81,9 +73,6 @@ export default function Login({ onSuccess }: Props) {
     setError("");
     try {
       await instance.loginRedirect(loginRequest);
-      // Browser navigates away here — code after this doesn't run until
-      // the redirect back, at which point the useEffect above (via the
-      // `accounts` array being populated) picks it up.
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
       setPhase("needsInteractiveSignIn");
@@ -100,7 +89,7 @@ export default function Login({ onSuccess }: Props) {
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9", display: "flex", flexDirection: "column" }}>
       <div style={{ background: "#0f4c3a", color: "#fff", padding: "0 32px", height: 56, display: "flex", alignItems: "center" }}>
-        <span style={{ fontWeight: 700, fontSize: 16 }}>Procurement Intake Platform</span>
+        <span style={{ fontWeight: 700, fontSize: 16 }}>VendorTrace</span>
       </div>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
         <div style={{ width: "100%", maxWidth: 420 }}>
@@ -111,7 +100,7 @@ export default function Login({ onSuccess }: Props) {
             <h1 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#0f4c3a" }}>Welcome</h1>
           </div>
 
-          {(phase === "checkingSso") && (
+          {phase === "checkingSso" && (
             <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", padding: "32px 24px", textAlign: "center", color: "#64748b", fontSize: 14 }}>
               Checking your Microsoft sign-in…
             </div>
@@ -126,7 +115,11 @@ export default function Login({ onSuccess }: Props) {
                 <p style={{ margin: 0, fontSize: 13, color: "#64748b", lineHeight: 1.6 }}>
                   You'll be taken to Microsoft's sign-in page. Once you're signed in, you won't need to do this again on this device.
                 </p>
-                {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
+                {error && (
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#dc2626" }}>
+                    {error}
+                  </div>
+                )}
                 <button
                   onClick={handleSignInClick}
                   disabled={phase === "signingIn"}
@@ -134,6 +127,26 @@ export default function Login({ onSuccess }: Props) {
                 >
                   {phase === "signingIn" ? "Redirecting…" : "Sign in with Microsoft"}
                 </button>
+
+                <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>
+                  <p style={{ margin: "0 0 10px", fontSize: 12, color: "#94a3b8", textAlign: "center" }}>— or try a demo —</p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleDemoLogin("businessOwner")}
+                      style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1.5px solid #0f4c3a", background: "#e0f2ec", color: "#0f4c3a", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                    >
+                      Demo: Business Owner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDemoLogin("team")}
+                      style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1.5px solid #5f9ea0", background: "#f0fafa", color: "#0f4c3a", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                    >
+                      Demo: Team Member
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -168,7 +181,11 @@ export default function Login({ onSuccess }: Props) {
                     ))}
                   </div>
                 </div>
-                {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#dc2626" }}>{error}</div>}
+                {error && (
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#dc2626" }}>
+                    {error}
+                  </div>
+                )}
                 <button
                   onClick={handleConfirmRole}
                   style={{ padding: "12px", borderRadius: 8, border: "none", background: "#0f4c3a", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
