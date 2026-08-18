@@ -10,6 +10,32 @@ interface Props {
 
 type Phase = "checkingSso" | "needsInteractiveSignIn" | "signingIn" | "chooseRole";
 
+// ─── Personal accounts (change name/email to match yours) ───────────────────
+const MY_ACCOUNTS: { accountId: string; label: string; sublabel: string; profile: UserProfile }[] = [
+  {
+    accountId: "amber-bo-001",
+    label: "Amber – Business Owner",
+    sublabel: "Your personal BO account",
+    profile: {
+      accountId: "amber-bo-001",
+      name: "Amber Greenshield",
+      email: "amber.greenshield@vendortrace.ca",
+      role: "businessOwner",
+    },
+  },
+  {
+    accountId: "amber-admin-001",
+    label: "Amber – All Teams",
+    sublabel: "View any team's dashboard",
+    profile: {
+      accountId: "amber-admin-001",
+      name: "Amber Greenshield",
+      email: "amber.greenshield@vendortrace.ca",
+      role: "admin",
+    },
+  },
+];
+
 export default function Login({ onSuccess }: Props) {
   const { instance, accounts } = useMsal();
   const [phase, setPhase] = useState<Phase>("checkingSso");
@@ -55,6 +81,13 @@ export default function Login({ onSuccess }: Props) {
     setPhase("chooseRole");
   }
 
+  function handlePersonalLogin(accountId: string) {
+    const account = MY_ACCOUNTS.find((a) => a.accountId === accountId)!;
+    setAuthUser(account.profile);
+    // admin always hits team-select; BO goes straight to app
+    onSuccess(account.profile, account.profile.role !== "businessOwner");
+  }
+
   function handleDemoLogin(demoRole: UserRole) {
     const demoId = demoRole === "businessOwner" ? "demo-bo-001" : "demo-team-001";
     const profile: UserProfile = {
@@ -62,10 +95,11 @@ export default function Login({ onSuccess }: Props) {
       name: demoRole === "businessOwner" ? "Demo Business Owner" : "Demo Team Member",
       email: "demo@vendortrace.ca",
       role: demoRole,
-      ...(demoRole === "team" ? { team: { id: 1, name: "Legal", memberCount: 3 } } : {}),
+      isDemo: true,
     };
     setAuthUser(profile);
-    onSuccess(profile, false);
+    // demo team member hits team-select; demo BO goes straight to app
+    onSuccess(profile, demoRole === "team");
   }
 
   async function handleSignInClick() {
@@ -92,16 +126,37 @@ export default function Login({ onSuccess }: Props) {
         <span style={{ fontWeight: 700, fontSize: 16 }}>VendorTrace</span>
       </div>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
-        <div style={{ width: "100%", maxWidth: 420 }}>
-          <div style={{ textAlign: "center", marginBottom: 28 }}>
+        <div style={{ width: "100%", maxWidth: 440, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ textAlign: "center", marginBottom: 4 }}>
             <div style={{ width: 56, height: 56, background: "#0f4c3a", borderRadius: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 12 }}>
               🏛
             </div>
             <h1 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 700, color: "#0f4c3a" }}>Welcome</h1>
           </div>
 
+          {/* ── Your personal accounts ── */}
+          <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+            <div style={{ background: "#0f4c3a", color: "#fff", padding: "10px 20px", fontSize: 13, fontWeight: 600 }}>
+              ⭐ Your Accounts
+            </div>
+            <div style={{ padding: "16px", display: "flex", gap: 10 }}>
+              {MY_ACCOUNTS.map((acct) => (
+                <button
+                  key={acct.accountId}
+                  type="button"
+                  onClick={() => handlePersonalLogin(acct.accountId)}
+                  style={{ flex: 1, textAlign: "left", padding: "12px 14px", borderRadius: 8, cursor: "pointer", border: "1.5px solid #0f4c3a", background: "#e0f2ec" }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>{acct.label}</div>
+                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, lineHeight: 1.4 }}>{acct.sublabel}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── MSAL sign-in + demo buttons ── */}
           {phase === "checkingSso" && (
-            <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", padding: "32px 24px", textAlign: "center", color: "#64748b", fontSize: 14 }}>
+            <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", padding: "24px", textAlign: "center", color: "#64748b", fontSize: 14 }}>
               Checking your Microsoft sign-in…
             </div>
           )}
@@ -109,12 +164,9 @@ export default function Login({ onSuccess }: Props) {
           {(phase === "needsInteractiveSignIn" || phase === "signingIn") && (
             <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", overflow: "hidden" }}>
               <div style={{ background: "#5f9ea0", color: "#fff", padding: "10px 20px", fontSize: 13, fontWeight: 600 }}>
-                🔐 Sign in with your organization account
+                🔐 Organization Sign-in &amp; Demo
               </div>
-              <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 16 }}>
-                <p style={{ margin: 0, fontSize: 13, color: "#64748b", lineHeight: 1.6 }}>
-                  You'll be taken to Microsoft's sign-in page. Once you're signed in, you won't need to do this again on this device.
-                </p>
+              <div style={{ padding: "20px 20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
                 {error && (
                   <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#dc2626" }}>
                     {error}
@@ -123,12 +175,12 @@ export default function Login({ onSuccess }: Props) {
                 <button
                   onClick={handleSignInClick}
                   disabled={phase === "signingIn"}
-                  style={{ padding: "12px", borderRadius: 8, border: "none", background: phase === "signingIn" ? "#94a3b8" : "#0f4c3a", color: "#fff", fontWeight: 700, fontSize: 15, cursor: phase === "signingIn" ? "not-allowed" : "pointer" }}
+                  style={{ padding: "12px", borderRadius: 8, border: "none", background: phase === "signingIn" ? "#94a3b8" : "#0f4c3a", color: "#fff", fontWeight: 700, fontSize: 14, cursor: phase === "signingIn" ? "not-allowed" : "pointer" }}
                 >
                   {phase === "signingIn" ? "Redirecting…" : "Sign in with Microsoft"}
                 </button>
 
-                <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>
+                <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
                   <p style={{ margin: "0 0 10px", fontSize: 12, color: "#94a3b8", textAlign: "center" }}>— or try a demo —</p>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button
