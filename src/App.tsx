@@ -51,7 +51,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (authPage !== "app") return;
+    if (authPage !== "app") return;F
     return reloadCases();
   }, [authPage, reloadCases]);
 
@@ -87,7 +87,7 @@ export default function App() {
     setAuthPage("app");
   }
 
-  /** Admin/team switch — keeps the user logged in, just picks a new team */
+  /** Admin — keeps the user logged in, just sends them back to pick a different team */
   function handleSwitchTeam() {
     if (!authUser) return;
     const updated = { ...authUser, team: undefined };
@@ -147,7 +147,7 @@ export default function App() {
 
   // ── Business Owner view ────────────────────────────────────────────────────
   if (isBusinessOwner) {
-    // Demo BO accounts see all cases; personal accounts see only their own
+    // Demo BO accounts (isDemo flag) see all cases; personal accounts see only their own
     const boCases = authUser?.isDemo
       ? cases
       : cases.filter((c) => c.businessOwner === authUser?.name);
@@ -167,12 +167,13 @@ export default function App() {
     if (boPage === "newCase") {
       return (
         <NewCaseIntake
-          userName={authUser?.name ?? ""}
-          onSubmitted={(newCase) => {
+          businessOwner={authUser?.name ?? ""}
+          businessOwnerEmail={authUser?.email ?? ""}
+          onBack={() => setBoPage("dashboard")}
+          onCreated={(newCase) => {
             setCases((prev) => [...prev, newCase]);
             setBoPage("dashboard");
           }}
-          onCancel={() => setBoPage("dashboard")}
         />
       );
     }
