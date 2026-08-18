@@ -6,9 +6,11 @@ interface TeamSnapshotProps {
   cases: TeamViewCase[];
   onOpenDashboard: () => void;
   onLogout?: () => void;
+  isAdmin?: boolean;
+  onSwitchTeam?: () => void;
 }
 
-export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDashboard, onLogout }: TeamSnapshotProps) {
+export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDashboard, onLogout, isAdmin, onSwitchTeam }: TeamSnapshotProps) {
   const openCases = cases.filter((c) => c.stage !== "completed").length;
   const newCases = cases.filter((c) => c.stage === "new").length;
   const closed = cases.filter((c) => c.stage === "completed").length;
@@ -20,10 +22,26 @@ export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDash
       <Header
         title={"Welcome Back, " + teamName + " 👋"}
         rightContent={
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {isAdmin && (
+              <span style={{ background: "rgba(255,255,255,0.18)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>
+                Admin
+              </span>
+            )}
             <span style={{ fontSize: 14, opacity: 0.85 }}>Team View</span>
+            {onSwitchTeam && (
+              <button
+                onClick={onSwitchTeam}
+                style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                ⇄ Switch Team
+              </button>
+            )}
             {onLogout && (
-              <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              <button
+                onClick={onLogout}
+                style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
                 Sign Out
               </button>
             )}
