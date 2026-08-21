@@ -62,8 +62,8 @@ export const RULES: Rule[] = [
   { key: "ai.q3.aiml", version: 1, active: true, factKey: "q3_aiMl", op: "equals", value: "Yes", triggerTeam: "AI", requireAssessment: "DataAIImpactAssessment" },
 
   // Security Governance (UpGuard assessment)
-  { key: "secgov.q2.infra", version: 1, active: true, factKey: "q2_itInfrastructure", op: "in", value: INFRA_INTEGRATION_ANSWERS, triggerTeam: "SecurityGovernance" },
-  { key: "secgov.q4.dataProtection", version: 1, active: true, factKey: "q4_dataProtection", op: "in", value: ALL_DATA_PROTECTION_YES_ANSWERS, triggerTeam: "SecurityGovernance" },
+  { key: "secgov.q2.infra", version: 1, active: true, factKey: "q2_itInfrastructure", op: "in", value: INFRA_INTEGRATION_ANSWERS, triggerTeam: "SecurityGovernance", requireAssessment: "UpguardAssessment" },
+  { key: "secgov.q4.dataProtection", version: 1, active: true, factKey: "q4_dataProtection", op: "in", value: ALL_DATA_PROTECTION_YES_ANSWERS, triggerTeam: "SecurityGovernance", requireAssessment: "UpguardAssessment" },
 
   // Security Architecture
   { key: "secarch.q2.infra", version: 1, active: true, factKey: "q2_itInfrastructure", op: "in", value: INFRA_INTEGRATION_ANSWERS, triggerTeam: "SecurityArchitecture" },
