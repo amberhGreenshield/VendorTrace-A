@@ -50,7 +50,7 @@ export interface CaseStage {
   completedBy?: string;
 }
 
-export type AssessmentKey = "PIA" | "DataAIImpactAssessment";
+export type AssessmentKey = "PIA" | "DataAIImpactAssessment" | "UpguardAssessment";
 
 export interface AssessmentDefinition {
   key: AssessmentKey;
@@ -73,6 +73,8 @@ export interface CaseAssessment {
    * applicable ones ever move past "pending".
    */
   applicable: boolean;
+  /** Extra context shown with the assessment card, e.g. explaining UpGuard isn't a SharePoint document. */
+  note?: string;
 }
 
 /** Answers pulled out of the TPRM workbook. Mirrors the `case_facts` table (fact_key/fact_value). */
