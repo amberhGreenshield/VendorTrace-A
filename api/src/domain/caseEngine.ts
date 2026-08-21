@@ -5,6 +5,7 @@ import { activateReadySeqOrders, isCaseFullyComplete } from "./hierarchy.js";
 const ASSESSMENT_OWNER_TEAMS: Record<AssessmentKey, TeamKey[]> = {
   PIA: ["Privacy"],
   DataAIImpactAssessment: ["Data", "AI"],
+  UpguardAssessment: ["SecurityGovernance"],   // ← add this line
 };
 
 function refreshAssessmentStatuses(caseRecord: Case): void {
