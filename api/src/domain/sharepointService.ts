@@ -11,19 +11,27 @@ import { loadGraphConfig, createFolder, copyItemToFolder, getItemByPath, shareIt
 //   TPRM Cases/_Templates/TPRM_Blank_Template.xlsx
 //   TPRM Cases/_Templates/PIA_Template.docx
 //   TPRM Cases/_Templates/Data_AI_Impact_Assessment_Template.docx
+//
+// UpGuard has NO template file — it's an external tool, not a SharePoint
+// document, so there's nothing to copy for it; it just shows up in the
+// case's assessment list with a note instead of a fileUrl.
 
 const CASES_FOLDER_PATH = "TPRM Cases";
 const TEMPLATES_FOLDER_PATH = "TPRM Cases/_Templates";
 
-const ASSESSMENT_TEMPLATES: Record<AssessmentKey, { label: string; fileName: string; localTemplate: string }> = {
+const ASSESSMENT_TEMPLATES: Record<AssessmentKey, { label: string; fileName?: string; localTemplate?: string; note?: string }> = {
   PIA: { label: "Privacy Impact Assessment (PIA)", fileName: "PIA_Template.docx", localTemplate: "/templates/PIA_Template.docx" },
   DataAIImpactAssessment: {
     label: "Data & AI Impact Assessment",
     fileName: "Data_AI_Impact_Assessment_Template.docx",
     localTemplate: "/templates/Data_AI_Impact_Assessment_Template.docx",
   },
+  UpguardAssessment: {
+    label: "UpGuard Security Assessment",
+    note: "Sent directly through UpGuard by the Security Governance team — not a SharePoint document.",
+  },
 };
-const ALL_ASSESSMENT_KEYS: AssessmentKey[] = ["PIA", "DataAIImpactAssessment"];
+const ALL_ASSESSMENT_KEYS: AssessmentKey[] = ["PIA", "DataAIImpactAssessment", "UpguardAssessment"];
 const TPRM_TEMPLATE_FILE_NAME = "TPRM_Blank_Template.xlsx";
 
 function slugify(legalName: string): string {
@@ -51,9 +59,6 @@ export async function createCaseFolder(
   const folderName = slugify(legalName);
   const folder = await createFolder(CASES_FOLDER_PATH, folderName);
 
-  // Give the Business Owner access to JUST this one folder — team members
-  // already see everything via the parent folder's permissions, but a BO
-  // should only ever see the cases they created.
   if (businessOwnerEmail) {
     try {
       await shareItemWithUser(folder.id, businessOwnerEmail, "write");
@@ -62,16 +67,16 @@ export async function createCaseFolder(
     }
   }
 
-  // Copy the blank TPRM workbook into the new folder, named after the vendor.
   await copyItemToFolder(`${TEMPLATES_FOLDER_PATH}/${TPRM_TEMPLATE_FILE_NAME}`, folder.id, `${folderName} - TPRM.xlsx`);
   const tprmItem = await getItemByPath(`${CASES_FOLDER_PATH}/${folderName}/${folderName} - TPRM.xlsx`);
 
-  // Copy BOTH assessment templates in — every case gets links to both, even
-  // ones this case doesn't strictly require, so reviewers always have a
-  // live SharePoint link to check. `applicable` tracks which ones actually matter.
   const assessments: CaseAssessment[] = [];
   for (const key of ALL_ASSESSMENT_KEYS) {
     const template = ASSESSMENT_TEMPLATES[key];
+    if (!template.fileName) {
+      assessments.push({ key, label: template.label, status: "pending", applicable: requiredAssessmentKeys.includes(key), note: template.note });
+      continue;
+    }
     await copyItemToFolder(`${TEMPLATES_FOLDER_PATH}/${template.fileName}`, folder.id, template.fileName);
     const item = await getItemByPath(`${CASES_FOLDER_PATH}/${folderName}/${template.fileName}`);
     assessments.push({
@@ -86,7 +91,6 @@ export async function createCaseFolder(
   return { folderUrl: folder.webUrl, tprmFileUrl: tprmItem.webUrl, assessments };
 }
 
-// ─── Mock fallback (used until Graph credentials are configured) ───────────
 async function createCaseFolderMocked(
   legalName: string,
   tprmFileName: string,
@@ -105,6 +109,7 @@ async function createCaseFolderMocked(
       status: "pending",
       fileUrl: template.localTemplate,
       applicable: requiredAssessmentKeys.includes(key),
+      note: template.note,
     };
   });
 
