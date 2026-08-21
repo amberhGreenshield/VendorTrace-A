@@ -84,6 +84,43 @@ export function completeStage(caseId: string, stageKey: string, completedBy: str
   });
 }
 
+// ─── User / team provisioning ───────────────────────────────────────────────
+
+export interface MeResponse {
+  found: boolean;
+  name?: string;
+  email?: string;
+  teamMemberships?: { teamId: number; teamName: string; isAdmin: boolean }[];
+}
+
+export function fetchMe(email: string): Promise<MeResponse> {
+  return request<MeResponse>(`/api/me?email=${encodeURIComponent(email)}`);
+}
+
+export interface ApiTeam {
+  id: number;
+  name: string;
+  members: { userId: number; name: string; email: string; isAdmin: boolean }[];
+}
+
+export function fetchTeams(): Promise<ApiTeam[]> {
+  return request<ApiTeam[]>("/api/teams");
+}
+
+export function addTeamMember(params: {
+  actingAdminEmail: string;
+  name: string;
+  email: string;
+  teamName: string;
+  isAdmin?: boolean;
+}): Promise<{ userId: number; name: string; email: string; teamName: string; isAdmin: boolean }> {
+  return request("/api/team-members", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
+
 /** Converts the API's raw (Prisma-shaped) case into the frontend's Case type. */
 export function mapApiCaseToCase(a: ApiCase): Case {
   return {
