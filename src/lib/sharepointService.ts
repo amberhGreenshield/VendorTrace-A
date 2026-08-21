@@ -17,12 +17,16 @@ const SHAREPOINT_SITE_BASE =
 
 const BLANK_TPRM_TEMPLATE_URL = "/templates/TPRM_Blank_Template.xlsx";
 
-const ASSESSMENT_TEMPLATES: Record<AssessmentKey, { label: string; localTemplate: string }> = {
+const ASSESSMENT_TEMPLATES: Record<AssessmentKey, { label: string; localTemplate?: string; note?: string }> = {
   PIA: { label: "Privacy Impact Assessment (PIA)", localTemplate: "/templates/PIA_Template.docx" },
   DataAIImpactAssessment: { label: "Data & AI Impact Assessment", localTemplate: "/templates/Data_AI_Impact_Assessment_Template.docx" },
+  UpguardAssessment: {
+    label: "UpGuard Security Assessment",
+    note: "Sent directly through UpGuard by the Security Governance team — not a SharePoint document.",
+  },
 };
 
-const ALL_ASSESSMENT_KEYS: AssessmentKey[] = ["PIA", "DataAIImpactAssessment"];
+const ALL_ASSESSMENT_KEYS: AssessmentKey[] = ["PIA", "DataAIImpactAssessment", "UpguardAssessment"];
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,9 +80,11 @@ export async function createCaseFolder(
       label: template.label,
       status: "pending",
       // Mocked: served from this app's own /templates folder rather than a
-      // real SharePoint copy, until Graph API access exists.
+      // real SharePoint copy, until Graph API access exists. UpGuard has no
+      // template file at all — it's an external tool, not a document.
       fileUrl: template.localTemplate,
       applicable: requiredAssessmentKeys.includes(key),
+      note: template.note,
     };
   });
 
