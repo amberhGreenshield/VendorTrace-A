@@ -31,5 +31,5 @@ export function completedFormsAndAssessments(c: Case): CompletedForm[] {
 
 /** Returns true if this case requires a Security Governance / UpGuard assessment. */
 export function requiresUpGuard(c: Case): boolean {
-  return c.stages.some((s) => s.team === "SecurityGovernance");
+  return c.stages.some((s) => s.team === "SecurityGovernance" && s.status !== "skipped");
 }
