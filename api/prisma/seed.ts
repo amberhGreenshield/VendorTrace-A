@@ -21,7 +21,7 @@ const TEAM_NAMES = [
 // name/email/team before running, so you become the first admin and can
 // add everyone else from the in-app admin panel from then on.
 const BOOTSTRAP_ADMINS: { name: string; email: string; teamName: string }[] = [
-  // { name: "Amber H", email: "amber.h@greenshield.ca", teamName: "PVM" },
+  { name: "Amber Hashwani", email: "amber.hashwani@greenshield.ca", teamName: "PVM" },
 ];
 
 async function main() {
