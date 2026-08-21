@@ -71,7 +71,7 @@ export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
       description: c.description,
       completedForms: c.completedForms,
       ourAssessments,
-      requiresUpGuard: c.stages.some((s) => s.team === "SecurityGovernance"),
+      requiresUpGuard: c.stages.some((s) => s.team === "SecurityGovernance" && s.status !== "skipped"),
       businessOwner: c.businessOwner,
       businessSponsor: c.businessSponsor,
       supplier: c.supplier,
