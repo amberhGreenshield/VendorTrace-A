@@ -13,12 +13,16 @@ interface StageProgressTrackerProps {
 }
 
 export default function StageProgressTracker({ stages }: StageProgressTrackerProps) {
-  const seqOrders = Array.from(new Set(stages.map((s) => s.seqOrder))).sort((a, b) => a - b);
+  // Only show teams actually relevant to this case — a skipped stage means
+  // the TPRM answers didn't trigger that team, so it shouldn't clutter the
+  // hierarchy view at all (not even grayed out).
+  const relevantStages = stages.filter((s) => s.status !== "skipped");
+  const seqOrders = Array.from(new Set(relevantStages.map((s) => s.seqOrder))).sort((a, b) => a - b);
 
   return (
     <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "4px 2px" }}>
       {seqOrders.map((seq, i) => {
-        const stagesAtSeq = stages.filter((s) => s.seqOrder === seq);
+        const stagesAtSeq = relevantStages.filter((s) => s.seqOrder === seq);
         return (
           <div key={seq} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
