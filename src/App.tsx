@@ -14,24 +14,18 @@ import BusinessOwnerSnapshot from "@/pages/BusinessOwnerSnapshot";
 import BusinessOwnerDashboard from "@/pages/BusinessOwnerDashboard";
 import BusinessOwnerCaseDetails from "@/pages/BusinessOwnerCaseDetails";
 import NewCaseIntake from "@/pages/NewCaseIntake";
+import AdminPanel from "@/pages/AdminPanel";
 
 type AuthPage = "login" | "team-select" | "app";
-type TeamPage = "snapshot" | "dashboard" | "caseDetails";
+type TeamPage = "snapshot" | "dashboard" | "caseDetails" | "adminPanel";
 type BoPage = "snapshot" | "dashboard" | "caseDetails" | "newCase";
 
 export default function App() {
   const { instance } = useMsal();
-  const [authPage, setAuthPage] = useState<AuthPage>(() => {
-    const user = getAuthUser();
-    if (!user) return "login";
-    // admin always picks a team first — even if returning
-    if (user.role === "admin" && !user.team) return "team-select";
-    return "app";
-  });
+  const [authPage, setAuthPage] = useState<AuthPage>(() => (getAuthUser() ? "app" : "login"));
   const [authUser, setAuthUser] = useState<UserProfile | null>(getAuthUser);
 
   const isBusinessOwner = authUser?.role === "businessOwner";
-  const isAdmin = authUser?.role === "admin";
   const teamName = authUser?.team?.name ?? "";
   const teamKey = teamKeyFromLabel(teamName);
 
@@ -73,9 +67,12 @@ export default function App() {
     storeUser(user);
     setAuthUser(user);
     if (user.role === "businessOwner") {
+      // Business Owners have their own dashboard straight away — no team to join.
       setAuthPage("app");
     } else {
-      // team members, admin, and demo team users all pick a team first
+      // Only reached if the database lookup failed and Login.tsx fell back
+      // to the manual picker — normal SSO sign-ins land directly in "app"
+      // already knowing their team.
       setAuthPage(isNew ? "team-select" : "app");
     }
   }
@@ -85,16 +82,6 @@ export default function App() {
     setAuthUser(user);
     setTeamPage("snapshot");
     setAuthPage("app");
-  }
-
-  /** Admin — keeps the user logged in, just sends them back to pick a different team */
-  function handleSwitchTeam() {
-    if (!authUser) return;
-    const updated = { ...authUser, team: undefined };
-    storeUser(updated);
-    setAuthUser(updated);
-    setTeamPage("snapshot");
-    setAuthPage("team-select");
   }
 
   async function handleStartStage(caseId: string, stageKey: string) {
@@ -115,30 +102,31 @@ export default function App() {
     }
   }
 
-  // ── Login ──────────────────────────────────────────────────────────────────
-  if (authPage === "login") {
-    return <Login onSuccess={handleLogin} />;
+  function handleCaseCreated(newCase: Case) {
+    setCases((prev) => [newCase, ...prev]);
+    setBoPage("dashboard");
   }
 
-  // ── Team / Admin select ────────────────────────────────────────────────────
-  if (authPage === "team-select" && authUser) {
-    return <TeamSelect user={authUser} onJoined={handleTeamJoined} />;
-  }
+  // ── Login ──────────────────────────────────────────────────────────────────
+  if (authPage === "login") return <Login onSuccess={handleLogin} />;
+  if (authPage === "team-select") return <TeamSelect user={authUser!} onJoined={handleTeamJoined} />;
 
   // ── Loading / error states ─────────────────────────────────────────────────
   if (casesLoading) {
     return (
-      <div style={{ fontFamily: "'Inter','Segoe UI',sans-serif", minHeight: "100vh", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: 14 }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', 'Segoe UI', sans-serif", color: "#64748b" }}>
         Loading cases…
       </div>
     );
   }
-
   if (casesError) {
     return (
-      <div style={{ fontFamily: "'Inter','Segoe UI',sans-serif", minHeight: "100vh", background: "#f1f5f9", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-        <div style={{ color: "#dc2626", fontSize: 14 }}>{casesError}</div>
-        <button onClick={reloadCases} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: "#0f4c3a", color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', 'Segoe UI', sans-serif", gap: 14 }}>
+        <div style={{ color: "#dc2626", fontSize: 14, maxWidth: 420, textAlign: "center" }}>{casesError}</div>
+        <button
+          onClick={reloadCases}
+          style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "#0f4c3a", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+        >
           Try again
         </button>
       </div>
@@ -147,50 +135,34 @@ export default function App() {
 
   // ── Business Owner view ────────────────────────────────────────────────────
   if (isBusinessOwner) {
-    // Demo BO accounts (isDemo flag) see all cases; personal accounts see only their own
-    const boCases = authUser?.isDemo
-      ? cases
-      : cases.filter((c) => c.businessOwner === authUser?.name);
-
-    if (boPage === "caseDetails" && boSelectedCaseId) {
-      const c = boCases.find((c) => c.id === boSelectedCaseId);
-      if (c) {
-        return (
-          <BusinessOwnerCaseDetails
-            case_={c}
-            onBack={() => setBoPage("dashboard")}
-          />
-        );
-      }
-    }
+    const boCases = cases.filter((c) => c.businessOwner === authUser?.name);
 
     if (boPage === "newCase") {
       return (
         <NewCaseIntake
-          businessOwner={authUser?.name ?? ""}
+          businessOwner={authUser?.name ?? "Business Owner"}
           businessOwnerEmail={authUser?.email ?? ""}
           onBack={() => setBoPage("dashboard")}
-          onCreated={(newCase) => {
-            setCases((prev) => [...prev, newCase]);
-            setBoPage("dashboard");
-          }}
+          onCreated={handleCaseCreated}
         />
       );
     }
-
+    if (boPage === "caseDetails" && boSelectedCaseId) {
+      const boCase = boCases.find((c) => c.id === boSelectedCaseId);
+      if (boCase) {
+        return <BusinessOwnerCaseDetails case_={boCase} onBack={() => setBoPage("dashboard")} />;
+      }
+    }
     if (boPage === "dashboard") {
       return (
         <BusinessOwnerDashboard
-          userName={authUser?.name ?? "Business Owner"}
           cases={boCases}
           onBack={() => setBoPage("snapshot")}
           onOpenCase={(c) => { setBoSelectedCaseId(c.id); setBoPage("caseDetails"); }}
           onNewCase={() => setBoPage("newCase")}
-          onLogout={handleLogout}
         />
       );
     }
-
     return (
       <BusinessOwnerSnapshot
         userName={authUser?.name ?? "Business Owner"}
@@ -202,8 +174,12 @@ export default function App() {
     );
   }
 
-  // ── Team / Admin view ──────────────────────────────────────────────────────
+  // ── Team view ──────────────────────────────────────────────────────────────
   const teamViewCases: TeamViewCase[] = teamKey ? casesForTeam(cases, teamKey) : [];
+
+  if (teamPage === "adminPanel") {
+    return <AdminPanel actingAdminEmail={authUser?.email ?? ""} onBack={() => setTeamPage("snapshot")} />;
+  }
 
   if (teamPage === "caseDetails" && selectedCaseId) {
     const viewCase = teamViewCases.find((c) => c.id === selectedCaseId);
@@ -219,7 +195,6 @@ export default function App() {
       );
     }
   }
-
   if (teamPage === "dashboard") {
     return (
       <TeamDashboard
@@ -232,15 +207,14 @@ export default function App() {
       />
     );
   }
-
   return (
     <TeamSnapshot
       teamName={teamName}
       cases={teamViewCases}
       onOpenDashboard={() => setTeamPage("dashboard")}
       onLogout={handleLogout}
-      isAdmin={isAdmin}
-      onSwitchTeam={isAdmin ? handleSwitchTeam : undefined}
+      isAdmin={authUser?.isAdmin}
+      onOpenAdminPanel={authUser?.isAdmin ? () => setTeamPage("adminPanel") : undefined}
     />
   );
 }
