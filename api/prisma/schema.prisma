@@ -41,11 +41,12 @@ model Team {
 }
 
 model TeamMember {
-  id     Int    @id @default(autoincrement())
-  userId Int
-  teamId Int
-  user   User   @relation(fields: [userId], references: [id])
-  team   Team   @relation(fields: [teamId], references: [id])
+  id      Int     @id @default(autoincrement())
+  userId  Int
+  teamId  Int
+  isAdmin Boolean @default(false) // can add/manage people on ANY team, not just this one — see api/README.md
+  user    User    @relation(fields: [userId], references: [id])
+  team    Team    @relation(fields: [teamId], references: [id])
 
   @@unique([userId, teamId])
 }
