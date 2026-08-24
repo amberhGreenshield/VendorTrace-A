@@ -57,10 +57,10 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
             <span style={{ fontSize: 22, lineHeight: 1 }}>🛡️</span>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>
-                UpGuard Security Assessment Required
+                Upguard Third Party Posture Assessment Required
               </div>
               <div style={{ fontSize: 13, color: "#78350f", lineHeight: 1.6 }}>
-                This vendor requires an <strong>UpGuard security assessment</strong> based on the TPRM intake answers.
+                This vendor requires an <strong>Upguard Third Party Posture Assessment</strong> based on the TPRM intake answers.
                 Please contact the <strong>Security Governance team</strong> to initiate this before the case is marked complete.
               </div>
             </div>
