@@ -4,12 +4,45 @@ import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { getProfileForAccount, setAuthUser, UserProfile, UserRole } from "@/lib/auth";
 import { loginRequest } from "@/lib/msalConfig";
 import { fetchMe } from "@/lib/apiClient";
+import { TEAM_LABELS, TeamKey } from "@/lib/schema";
 
 interface Props {
   onSuccess: (user: UserProfile, isNew: boolean) => void;
 }
 
-type Phase = "checkingSso" | "needsInteractiveSignIn" | "signingIn" | "chooseRole";
+type Phase = "checkingSso" | "needsInteractiveSignIn" | "signingIn" | "chooseRole" | "demo";
+
+// ─── DEMO SIGN-IN (no SSO required) ─────────────────────────────────────────
+// Real SSO needs an Entra ID app registration (see msalConfig.ts) — until
+// that's wired up, this lets anyone jump straight into the app as a
+// Business Owner or as a specific review team, so cases can be created and
+// walked through the whole hierarchy for demos/testing.
+//
+// This is intentionally NOT gated behind an env flag right now so it's easy
+// to demo from any deployed environment. Once real SSO is live, either
+// delete this block or gate it behind something like
+// `import.meta.env.VITE_ENABLE_DEMO_LOGIN`.
+const DEMO_TEAM_KEYS = Object.keys(TEAM_LABELS) as TeamKey[];
+
+function demoTeamProfile(teamKey: TeamKey): UserProfile {
+  return {
+    accountId: `demo-team-${teamKey}`,
+    name: `Demo ${TEAM_LABELS[teamKey]} Reviewer`,
+    email: `demo.${teamKey.toLowerCase()}@vendortrace.demo`,
+    role: "team",
+    team: { id: -1, name: TEAM_LABELS[teamKey], memberCount: 1 },
+    isAdmin: false,
+  };
+}
+
+function demoBusinessOwnerProfile(): UserProfile {
+  return {
+    accountId: "demo-business-owner",
+    name: "Demo Business Owner",
+    email: "demo.bo@vendortrace.demo",
+    role: "businessOwner",
+  };
+}
 
 export default function Login({ onSuccess }: Props) {
   const { instance, accounts } = useMsal();
@@ -116,6 +149,11 @@ export default function Login({ onSuccess }: Props) {
     onSuccess(profile, true);
   }
 
+  function handleDemoLogin(profile: UserProfile) {
+    setAuthUser(profile);
+    onSuccess(profile, false);
+  }
+
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9", display: "flex", flexDirection: "column" }}>
       <div style={{ background: "#0f4c3a", color: "#fff", padding: "0 32px", height: 56, display: "flex", alignItems: "center" }}>
@@ -152,6 +190,67 @@ export default function Login({ onSuccess }: Props) {
                   style={{ padding: "12px", borderRadius: 8, border: "none", background: phase === "signingIn" ? "#94a3b8" : "#0f4c3a", color: "#fff", fontWeight: 700, fontSize: 15, cursor: phase === "signingIn" ? "not-allowed" : "pointer" }}
                 >
                   {phase === "signingIn" ? "Redirecting…" : "Sign in with Microsoft"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhase("demo")}
+                  style={{ padding: "10px", borderRadius: 8, border: "1.5px dashed #cbd5e1", background: "#f8fafc", color: "#475569", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}
+                >
+                  SSO not set up yet? Continue with a demo account →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {phase === "demo" && (
+            <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+              <div style={{ background: "#5f9ea0", color: "#fff", padding: "10px 20px", fontSize: 13, fontWeight: 600 }}>
+                🧪 Demo sign-in (no SSO)
+              </div>
+              <div style={{ padding: "24px 24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
+                <p style={{ margin: 0, fontSize: 12.5, color: "#64748b", lineHeight: 1.6 }}>
+                  For demos and testing while Microsoft sign-in isn't configured. Pick a role below to jump
+                  straight in — no Microsoft account needed.
+                </p>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 8 }}>
+                    Business Owner
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleDemoLogin(demoBusinessOwnerProfile())}
+                    style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 8, cursor: "pointer", border: "1.5px solid #cbd5e1", background: "#fff" }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>Continue as Demo Business Owner</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Submit a new case and track it on your dashboard.</div>
+                  </button>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 8 }}>
+                    Review Team
+                  </label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
+                    {DEMO_TEAM_KEYS.map((teamKey) => (
+                      <button
+                        type="button"
+                        key={teamKey}
+                        onClick={() => handleDemoLogin(demoTeamProfile(teamKey))}
+                        style={{ width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, cursor: "pointer", border: "1.5px solid #cbd5e1", background: "#fff" }}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>{TEAM_LABELS[teamKey]} team</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPhase("needsInteractiveSignIn")}
+                  style={{ padding: "8px", borderRadius: 8, border: "none", background: "transparent", color: "#64748b", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}
+                >
+                  ← Back to Microsoft sign-in
                 </button>
               </div>
             </div>
