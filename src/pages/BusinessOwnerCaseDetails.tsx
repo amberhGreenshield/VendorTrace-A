@@ -82,10 +82,10 @@ export default function BusinessOwnerCaseDetails({ case_: c, onBack }: BusinessO
             <span style={{ fontSize: 22, lineHeight: 1 }}>🛡️</span>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>
-                UpGuard Security Assessment Required
+                Upguard Third Party Posture Assessment Required
               </div>
               <div style={{ fontSize: 13, color: "#78350f", lineHeight: 1.6 }}>
-                Based on the TPRM answers, this vendor requires an <strong>UpGuard security assessment</strong>.
+                Based on the TPRM answers, this vendor requires an <strong>Upguard Third Party Posture Assessment</strong>.
                 Please contact the <strong>Security Governance team</strong> to initiate the assessment.
                 The review cannot be considered complete until this is done.
               </div>
