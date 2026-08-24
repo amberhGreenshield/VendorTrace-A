@@ -84,18 +84,37 @@ export function currentTeamForCase(caseRecord: Case): TeamKey | undefined {
 }
 
 /**
- * "Next Review" as a plain team name (e.g. "Risk", "Privacy") rather than a
- * date — this is the team the case is currently sitting with / about to sit
- * with next in the hierarchy.
+ * "Next Review" as a plain team name (e.g. "Risk", "Privacy") — this is the
+ * team (or teams, if the next step runs in parallel) that will pick the
+ * case up *after* whichever stage is currently active/in progress, i.e.
+ * the next stop in the hierarchy sequence rather than the current one.
  */
 export function nextReviewTeam(caseRecord: Case): string {
   if (isCaseFullyComplete(caseRecord.stages)) return "Completed";
-  const team = currentTeamForCase(caseRecord);
-  if (team) return TEAM_LABELS[team];
-  const nextPending = caseRecord.stages
-    .filter((s) => s.status === "pending")
-    .sort((a, b) => a.seqOrder - b.seqOrder)[0];
-  return nextPending ? TEAM_LABELS[nextPending.team] : "—";
+
+  const seqOrders = Array.from(new Set(caseRecord.stages.map((s) => s.seqOrder))).sort((a, b) => a - b);
+
+  // The seqOrder currently in play (active/inProgress), if any. Everything
+  // at or before this seqOrder is either done, skipped, or already the
+  // "current" stop — not the "next" one.
+  const activeStage = caseRecord.stages.find((s) => s.status === "active" || s.status === "inProgress");
+  const currentSeq = activeStage?.seqOrder;
+  const upcomingSeqs = currentSeq !== undefined ? seqOrders.filter((seq) => seq > currentSeq) : seqOrders;
+
+  for (const seq of upcomingSeqs) {
+    const teamsAtSeq = Array.from(
+      new Set(
+        caseRecord.stages
+          .filter((s) => s.seqOrder === seq && s.status !== "skipped" && s.status !== "completed")
+          .map((s) => s.team)
+      )
+    );
+    if (teamsAtSeq.length > 0) {
+      return teamsAtSeq.map((t) => TEAM_LABELS[t]).join(" + ");
+    }
+  }
+
+  return "—";
 }
 
 /** Days since the Business Owner uploaded the TPRM workbook and the case was created. */
