@@ -42,6 +42,22 @@ export default function BusinessOwnerCaseDetails({ case_: c, onBack }: BusinessO
           ) : null
         )}
       </div>
+      {!c.sharepointFolderUrl && (
+        <div style={{
+          margin: "16px 32px 0",
+          background: "#fffbeb",
+          border: "1.5px solid #f59e0b",
+          borderRadius: 10,
+          padding: "14px 18px",
+          color: "#78350f",
+          fontSize: 13,
+          lineHeight: 1.6,
+        }}>
+          <strong>SharePoint setup pending.</strong> Your case was submitted successfully, but the SharePoint
+          folder and document links are not available yet. They will appear here after the VendorTrace
+          SharePoint connection is approved and provisioned.
+        </div>
+      )}
       {c.tprmFileUrl && (
         <div style={{ padding: "0 32px 12px", marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
           <a

@@ -41,6 +41,21 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
           ) : null
         )}
       </div>
+      {!c.raw.sharepointFolderUrl && (
+        <div style={{
+          margin: "16px 32px 0",
+          background: "#fffbeb",
+          border: "1.5px solid #f59e0b",
+          borderRadius: 10,
+          padding: "14px 18px",
+          color: "#78350f",
+          fontSize: 13,
+          lineHeight: 1.6,
+        }}>
+          <strong>SharePoint setup pending.</strong> This case is in the review workflow, but its SharePoint folder
+          and document links are not available yet.
+        </div>
+      )}
 
       {/* UpGuard Security Assessment notice — only shown when Security Governance is triggered */}
       {c.requiresUpGuard && (

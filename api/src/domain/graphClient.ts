@@ -50,14 +50,18 @@ async function getAccessToken(config: GraphConfig): Promise<string> {
 }
 
 async function graphFetch(config: GraphConfig, path: string, init: RequestInit = {}): Promise<Response> {
+  return graphFetchUrl(config, `https://graph.microsoft.com/v1.0${path}`, init);
+}
+
+async function graphFetchUrl(config: GraphConfig, url: string, init: RequestInit = {}): Promise<Response> {
   const token = await getAccessToken(config);
-  const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+  const res = await fetch(url, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...init.headers },
   });
   if (!res.ok && res.status !== 202) {
-    console.error(`Graph API error on ${path}: ${res.status} ${await res.text()}`);
-    throw new Error(`Graph API error (${res.status}) on ${path}`);
+    console.error(`Graph API error on ${url}: ${res.status} ${await res.text()}`);
+    throw new Error(`Graph API error (${res.status}) on ${url}`);
   }
   return res;
 }
@@ -87,6 +91,8 @@ interface DriveItem {
   name: string;
 }
 
+export type { DriveItem };
+
 /** Looks up an item (file or folder) in the drive by its path, e.g. "TPRM Cases/_Templates/PIA_Template.docx" */
 export async function getItemByPath(path: string): Promise<DriveItem> {
   const config = loadGraphConfig();
@@ -105,6 +111,30 @@ export async function createFolder(parentPath: string, folderName: string): Prom
     method: "POST",
     body: JSON.stringify({ name: folderName, folder: {}, "@microsoft.graph.conflictBehavior": "fail" }),
   });
+  return (await res.json()) as DriveItem;
+}
+
+/** Uploads a file's bytes into a drive folder and returns the created item. */
+export async function uploadFileToFolder(
+  folderId: string,
+  fileName: string,
+  content: Buffer,
+  contentType = "application/octet-stream"
+): Promise<DriveItem> {
+  const config = loadGraphConfig();
+  if (!config) throw new Error("Graph not configured");
+  const driveId = await resolveDriveId(config);
+  const res = await graphFetch(
+    config,
+    `/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/content`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      // Node's Buffer is accepted by fetch at runtime; the DOM typings used
+      // by this project do not include the Node Buffer type in BodyInit.
+      body: content as unknown as BodyInit,
+    }
+  );
   return (await res.json()) as DriveItem;
 }
 
@@ -128,10 +158,11 @@ export async function copyItemToFolder(sourcePath: string, destFolderId: string,
   if (!monitorUrl) return; // some tenants complete synchronously with no monitor URL — treat as done
 
   for (let attempt = 0; attempt < 15; attempt++) {
-    const statusRes = await fetch(monitorUrl);
+    const statusRes = await graphFetchUrl(config, monitorUrl);
     if (statusRes.status === 200) {
       const status = (await statusRes.json()) as { status?: string };
       if (status.status === "completed") return;
+      if (status.status === "failed") throw new Error(`Copy failed: ${sourcePath} -> ${newName}`);
     }
     await new Promise((r) => setTimeout(r, 1000));
   }

@@ -193,10 +193,10 @@ export default function NewCaseIntake({ businessOwner, businessOwnerEmail, onBac
             )}
 
             <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.6, margin: "16px 0 24px" }}>
-              Submitting will create a SharePoint case folder named <strong>{preview.legalName}</strong>, copy in a
-              blank TPRM workbook plus the PIA and Data &amp; AI Impact Assessment templates (so links are available
-              to every reviewer even when a template isn't required for this case), and open a new case for the
-              teams above.
+              Submitting will create the case and open the review workflow. Once SharePoint access is approved,
+              the backend will create a folder named <strong>{preview.legalName}</strong>, upload the completed
+              workbook, and add only the required assessment templates. Until then, the case will be clearly marked
+              as SharePoint setup pending rather than showing fake document links.
             </p>
 
             <div style={{ display: "flex", gap: 10 }}>

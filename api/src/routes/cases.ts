@@ -67,9 +67,9 @@ casesRouter.post("/", upload.single("tprmFile"), async (req, res) => {
     const stages = buildCaseStages(evaluation);
     const folder = await createCaseFolder(
       facts.legalName,
-      file.originalname,
       Array.from(evaluation.requiredAssessments) as AssessmentKey[],
-      businessOwnerEmail
+      businessOwnerEmail,
+      file.buffer
     );
 
     const firstActive = stages.find((s) => s.status === "active");
