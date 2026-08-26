@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { UserProfile } from "@/lib/auth";
-import { mockGetTeams, mockJoinTeam } from "@/lib/mockApi";
+import { fetchTeams, saveMyRole } from "@/lib/apiClient";
+
 
 interface Props {
   user: UserProfile;

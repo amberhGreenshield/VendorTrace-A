@@ -99,3 +99,90 @@ usersRouter.post("/team-members", async (req, res) => {
 
   res.status(201).json({ userId: user.id, name: user.name, email: user.email, teamName: team.name, isAdmin: membership.isAdmin });
 });
+
+//Add the persistence endpoint
+
+usersRouter.post("/me/profile", async (req, res) => {
+  const { name, email, role, teamName } = req.body as {
+    name?: string;
+    email?: string;
+    role?: "team" | "businessOwner";
+    teamName?: string;
+  };
+
+  if (!name || !email || !role) {
+    return res.status(400).json({
+      error: "name, email, and role are required",
+    });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail.endsWith("@greenshield.ca")) {
+    return res.status(403).json({
+      error: "Only GreenShield accounts can use VendorTrace.",
+    });
+  }
+
+  if (role === "team" && !teamName) {
+    return res.status(400).json({
+      error: "teamName is required for team members.",
+    });
+  }
+
+  const user = await prisma.user.upsert({
+    where: { email: normalizedEmail },
+    update: {
+      name,
+      role: role === "team" ? "team_member" : "business_owner",
+    },
+    create: {
+      name,
+      email: normalizedEmail,
+      role: role === "team" ? "team_member" : "business_owner",
+    },
+  });
+
+  if (role === "businessOwner") {
+    return res.json({
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { name: teamName },
+  });
+
+  if (!team) {
+    return res.status(404).json({
+      error: `Team "${teamName}" was not found.`,
+    });
+  }
+
+  const membership = await prisma.teamMember.upsert({
+    where: {
+      userId_teamId: {
+        userId: user.id,
+        teamId: team.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: user.id,
+      teamId: team.id,
+      isAdmin: false,
+    },
+  });
+
+  return res.json({
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    teamName: team.name,
+    isAdmin: membership.isAdmin,
+  });
+});

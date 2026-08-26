@@ -121,6 +121,25 @@ export function addTeamMember(params: {
   });
 }
 
+export function saveMyRole(params: {
+  name: string;
+  email: string;
+  role: "team" | "businessOwner";
+  teamName?: string;
+}): Promise<{
+  userId: number;
+  name: string;
+  email: string;
+  role: string;
+  teamName?: string;
+}> {
+  return request("/api/me/profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
+
 /** Converts the API's raw (Prisma-shaped) case into the frontend's Case type. */
 export function mapApiCaseToCase(a: ApiCase): Case {
   return {

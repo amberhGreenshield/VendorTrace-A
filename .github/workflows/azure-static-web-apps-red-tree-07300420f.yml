@@ -31,6 +31,10 @@ jobs:
           output_location: "dist"
         env:
           VITE_API_BASE_URL: https://gsh-vtr-pd-cac-app-01.azurewebsites.net
+          VITE_MSAL_CLIENT_ID: ${{ vars.VITE_MSAL_CLIENT_ID }}
+          VITE_MSAL_TENANT_ID: 92c35dd7-ce82-4780-95b1-7a86113d755c
+          VITE_ENABLE_DEMO_LOGIN: "false"
+
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
