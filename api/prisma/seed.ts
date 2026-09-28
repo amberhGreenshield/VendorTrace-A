@@ -17,9 +17,7 @@ const TEAM_NAMES = [
 
 // ─── Bootstrap admin(s) ──────────────────────────────────────────────────
 // Nobody can be added to a team through the app until at least one admin
-// exists — but admins are the ones who add people. EDIT THIS with your own
-// name/email/team before running, so you become the first admin and can
-// add everyone else from the in-app admin panel from then on.
+// exists — but admins are the ones who add people. 
 const BOOTSTRAP_ADMINS: { name: string; email: string; teamName: string }[] = [
   { name: "Amber Hashwani", email: "amber.hashwani@greenshield.ca", teamName: "PVM" },
 ];
