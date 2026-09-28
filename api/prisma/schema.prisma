@@ -2,8 +2,8 @@
 // This is a direct translation of src/lib/schema.ts on the frontend, so the
 // two stay in sync conceptually. Facts (the TPRM answers) are stored as a
 // single JSON column rather than a fully normalized case_facts table for now
-// — that's an intentional simplification; it can be split into its own
-// table later if you need to query individual facts across cases.
+// — that's an intentional simplification it can be split into its own
+// table later if need to query individual facts across cases.
 
 generator client {
   provider = "prisma-client-js"
