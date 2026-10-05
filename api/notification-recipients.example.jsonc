@@ -1,0 +1,14 @@
+// EXAMPLE ONLY. Keep real staff details in an ignored private file, never in public GitHub.
+// Copy to notification-recipients.local.jsonc and replace placeholder addresses.
+// Each recipient receives a separate email. This roster does not grant application access.
+{
+  "PVM": ["test-recipient@example.com"],
+  "BusinessArchitecture": ["test-recipient@example.com"],
+  "Risk": ["test-recipient@example.com"],
+  "Privacy": ["test-recipient@example.com"],
+  "Data": ["test-recipient@example.com"],
+  "AI": ["test-recipient@example.com"],
+  "SecurityGovernance": ["test-recipient@example.com"],
+  "SecurityArchitecture": ["test-recipient@example.com"],
+  "EnterpriseArchitecture": ["test-recipient@example.com"]
+}

@@ -34,6 +34,16 @@ enum OverallStatus {
   completed
 }
 
+enum NotificationStatus {
+  pending
+  processing
+  accepted
+  retry
+  failed
+  unknown
+  previewed
+}
+
 model Team {
   id      Int          @id @default(autoincrement())
   name    String       @unique // e.g. "Privacy", "PVM", "Business Architecture"
@@ -87,6 +97,7 @@ model Case {
 
   stages      CaseStage[]
   assessments CaseAssessment[]
+  notifications EmailNotification[]
 }
 
 model CaseStage {
@@ -117,4 +128,29 @@ model CaseAssessment {
   note   String?
 
   @@unique([caseId, key])
+}
+
+// Email addresses/message snapshots are personal/business data: include this table in the retention policy.
+model EmailNotification {
+  id            String             @id @default(cuid())
+  dedupeKey     String             @unique
+  caseId        String
+  case          Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kind          String
+  teamKey       String
+  stageKey      String?
+  recipient     String
+  subject       String
+  body          String
+  mode          String             // preview/test/live; mode never changes on an existing job
+  status        NotificationStatus @default(pending)
+  attempts      Int                @default(0)
+  nextAttemptAt DateTime           @default(now())
+  lockedAt      DateTime?
+  acceptedAt    DateTime?
+  lastError     String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([status, mode, nextAttemptAt])
 }

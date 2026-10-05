@@ -10,7 +10,10 @@
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "test:notifications": "node --import tsx --test tests/notifications.test.ts",
+    "test:notifications:db": "node --import tsx --test tests/notifications.integration.test.ts",
+    "notifications:preview": "tsx scripts/preview-notifications.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",

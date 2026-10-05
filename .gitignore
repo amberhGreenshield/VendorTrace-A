@@ -5,3 +5,8 @@ node_modules
 **/.env
 **/.env.*
 !**/.env.example
+
+# Private staff notification rosters must never be committed, even as comments.
+**/notification-recipients.local.jsonc
+**/notification-recipients.*.local.jsonc
+**/dist
