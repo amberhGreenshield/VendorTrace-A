@@ -1,0 +1,104 @@
+// PRIVATE STAFF ROSTER. Do not commit or upload to the public GitHub repository.
+// Amber is the only active recipient for every team during testing.
+// Real recipients are preserved below as full-line comments, not active entries.
+// Live mail is disabled until sender approval; confirm Risk recipients before any go-live.
+{
+  "PVM": [
+    "amber.hashwani@greenshield.ca"
+    // Amber Hashwani is already the active test recipient.
+    // , "pramod.mysoresrinivasa@greenshield.ca"
+    // Pramod Mysore Srinivasa
+  ],
+  "BusinessArchitecture": [
+    "amber.hashwani@greenshield.ca"
+    // , "Alan.Hyland@greenshield.ca"
+    // Alan Hyland
+    // , "Dora.Leslie@greenshield.ca"
+    // Dora Leslie
+    // , "Eileen.Trillanes@greenshield.ca"
+    // Eileen Trillanes
+    // , "Jeremy.Comartin@greenshield.ca"
+    // Jeremy Comartin
+    // , "Kristine.Goulet@greenshield.ca"
+    // Kristine Goulet
+    // , "Dave.Bedard@greenshield.ca"
+    // Dave Bedard
+  ],
+  "Risk": [
+    "amber.hashwani@greenshield.ca"
+    // Actual Risk recipients were not supplied. Obtain before live rollout.
+  ],
+  "Privacy": [
+    "amber.hashwani@greenshield.ca"
+    // , "ashwini.rai@greenshield.ca"
+    // Ashwini Rai
+    // , "Melissa.Yakeley@greenshield.ca"
+    // Melissa Yakeley
+    // , "cyprian.kebbianyor@greenshield.ca"
+    // Cyprian Kebbianyor
+    // , "Winnie.Choi@greenshield.ca"
+    // Winnie Choi
+  ],
+  "Data": [
+    "amber.hashwani@greenshield.ca"
+    // , "omar.daudi@greenshield.ca"
+    // Omar Daudi
+    // , "debajyoti.kar@greenshield.ca"
+    // Debajyoti Kar
+    // , "alnoor.mohamed@greenshield.ca"
+    // Alnoor Mohamed
+    // , "aanand.neethirajan@greenshield.ca"
+    // Aanand Neethirajan
+  ],
+  "AI": [
+    "amber.hashwani@greenshield.ca"
+    // , "yao.kouadio@greenshield.ca"
+    // Yao Kouadio
+    // , "Christos.Stigas@greenshield.ca"
+    // Christos Stigas
+    // , "Daniela.Longo@greenshield.ca"
+    // Daniela Longo
+  ],
+  "SecurityGovernance": [
+    "amber.hashwani@greenshield.ca"
+    // UpGuard setup requests use this same team roster.
+    // , "jacqueline.farrell@greenshield.ca"
+    // Jacqueline Farrell
+    // , "harrison.iyere@greenshield.ca"
+    // Harrison Iyere
+    // , "aaron.khan@greenshield.ca"
+    // Aaron Khan
+    // , "dele.saliu@greenshield.ca"
+    // Dele Saliu
+    // , "daniel.espinal@greenshield.ca"
+    // Daniel Espinal
+  ],
+  "SecurityArchitecture": [
+    "amber.hashwani@greenshield.ca"
+    // , "krush.kunasingam@greenshield.ca"
+    // Krush Kunasingam
+    // , "roger.pazin@greenshield.ca"
+    // Roger Pazin
+    // , "murli.sharma@greenshield.ca"
+    // Murli Sharma
+    // , "elie.wehbe@greenshield.ca"
+    // Elie Wehbe
+    // , "samuel.oladele@greenshield.ca"
+    // Samuel Oladele
+    // , "igor.gofman@greenshield.ca"
+    // Igor Gofman
+  ],
+  "EnterpriseArchitecture": [
+    "amber.hashwani@greenshield.ca"
+    // , "thomas.joseph@greenshield.ca"
+    // Thomas Joseph
+    // , "martin.burcew@greenshield.ca"
+    // Martin Burcew
+    // , "Eric.Baines@greenshield.ca"
+    // Eric Baines
+    // , "Amitabh.Awasty@greenshield.ca"
+    // Amitabh Awasty
+    // , "lina.casas@greenshield.ca"
+    // Line Casas (name/address preserved as supplied)
+  ]
+}
