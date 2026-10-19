@@ -9,9 +9,12 @@ interface TeamSnapshotProps {
   /** True if the database says this person is an admin (see api/README.md). */
   isAdmin?: boolean;
   onOpenAdminPanel?: () => void;
+  /** Case admins only — opens the Admin Inbox / hierarchy editor. */
+  onOpenAdminInbox?: () => void;
+  adminInboxCount?: number;
 }
 
-export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDashboard, onLogout, isAdmin, onOpenAdminPanel }: TeamSnapshotProps) {
+export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDashboard, onLogout, isAdmin, onOpenAdminPanel, onOpenAdminInbox, adminInboxCount }: TeamSnapshotProps) {
   const openCases = cases.filter((c) => c.stage !== "completed").length;
   const newCases = cases.filter((c) => c.stage === "new").length;
   const closed = cases.filter((c) => c.stage === "completed").length;
@@ -68,7 +71,18 @@ export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDash
             )}
           </div>
         </div>
-        <div style={{ paddingTop: 4 }}>
+        <div style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+          {onOpenAdminInbox && (
+            <button
+              onClick={onOpenAdminInbox}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", border: "none", borderRadius: 8, background: "#0f4c3a", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              🗂️ Admin Inbox
+              {!!adminInboxCount && (
+                <span style={{ background: "#f59e0b", color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 12, fontWeight: 700 }}>{adminInboxCount}</span>
+              )}
+            </button>
+          )}
           <button onClick={onOpenDashboard} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", border: "2px solid #0f4c3a", borderRadius: 8, background: "#fff", color: "#0f4c3a", fontWeight: 600, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
             📋 Team Dashboard
           </button>

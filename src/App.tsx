@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import { getAuthUser, setAuthUser as storeUser, clearAuthUser, UserProfile } from "@/lib/auth";
 import { Case } from "@/lib/schema";
-import { fetchAllCases, startCaseStage, completeCaseStage } from "@/lib/caseStore";
+import { fetchAllCases, startCaseStage, completeCaseStage, saveCaseHierarchy } from "@/lib/caseStore";
+import { HierarchyEditStage } from "@/lib/apiClient";
+import { ADMIN_STAGE_KEY } from "@/lib/hierarchy";
 import { casesForTeam, teamKeyFromLabel, TeamViewCase } from "@/lib/viewAdapters";
 
 import Login from "@/pages/Login";
@@ -15,9 +17,11 @@ import BusinessOwnerDashboard from "@/pages/BusinessOwnerDashboard";
 import BusinessOwnerCaseDetails from "@/pages/BusinessOwnerCaseDetails";
 import NewCaseIntake from "@/pages/NewCaseIntake";
 import AdminPanel from "@/pages/AdminPanel";
+import AdminInbox from "@/pages/AdminInbox";
+import AdminCaseView from "@/pages/AdminCaseView";
 
 type AuthPage = "login" | "team-select" | "app";
-type TeamPage = "snapshot" | "dashboard" | "caseDetails" | "adminPanel";
+type TeamPage = "snapshot" | "dashboard" | "caseDetails" | "adminPanel" | "adminInbox" | "adminCase";
 type BoPage = "snapshot" | "dashboard" | "caseDetails" | "newCase";
 
 export default function App() {
@@ -51,6 +55,7 @@ export default function App() {
 
   const [teamPage, setTeamPage] = useState<TeamPage>("snapshot");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [adminCaseId, setAdminCaseId] = useState<string | null>(null);
   const [boPage, setBoPage] = useState<BoPage>("snapshot");
   const [boSelectedCaseId, setBoSelectedCaseId] = useState<string | null>(null);
 
@@ -100,6 +105,18 @@ export default function App() {
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to complete this stage. Please try again.");
     }
+  }
+
+  // ── Case-admin actions ───────────────────────────────────────────────────
+  // Errors are re-thrown so AdminCaseView can show them inline.
+  async function handleSaveHierarchy(caseId: string, stages: HierarchyEditStage[]) {
+    const updated = await saveCaseHierarchy(caseId, authUser?.email ?? "", stages);
+    setCases((prev) => prev.map((c) => (c.id === caseId ? updated : c)));
+  }
+
+  async function handleReleaseFromAdmin(caseId: string) {
+    const updated = await completeCaseStage(caseId, ADMIN_STAGE_KEY, authUser?.name ?? "Admin");
+    setCases((prev) => prev.map((c) => (c.id === caseId ? updated : c)));
   }
 
   function handleCaseCreated(newCase: Case) {
@@ -177,6 +194,29 @@ export default function App() {
   // ── Team view ──────────────────────────────────────────────────────────────
   const teamViewCases: TeamViewCase[] = teamKey ? casesForTeam(cases, teamKey) : [];
 
+  if (authUser?.isCaseAdmin && teamPage === "adminCase" && adminCaseId) {
+    const adminCase = cases.find((c) => c.id === adminCaseId);
+    if (adminCase) {
+      return (
+        <AdminCaseView
+          case_={adminCase}
+          onBack={() => setTeamPage("adminInbox")}
+          onSaveHierarchy={handleSaveHierarchy}
+          onRelease={handleReleaseFromAdmin}
+        />
+      );
+    }
+  }
+  if (authUser?.isCaseAdmin && (teamPage === "adminInbox" || teamPage === "adminCase")) {
+    return (
+      <AdminInbox
+        cases={cases}
+        onBack={() => setTeamPage("snapshot")}
+        onOpenCase={(c) => { setAdminCaseId(c.id); setTeamPage("adminCase"); }}
+      />
+    );
+  }
+
   if (teamPage === "adminPanel") {
     return <AdminPanel actingAdminEmail={authUser?.email ?? ""} onBack={() => setTeamPage("snapshot")} />;
   }
@@ -215,6 +255,12 @@ export default function App() {
       onLogout={handleLogout}
       isAdmin={authUser?.isAdmin}
       onOpenAdminPanel={authUser?.isAdmin ? () => setTeamPage("adminPanel") : undefined}
+      onOpenAdminInbox={authUser?.isCaseAdmin ? () => setTeamPage("adminInbox") : undefined}
+      adminInboxCount={
+        authUser?.isCaseAdmin
+          ? cases.filter((c) => c.stages.some((s) => s.stageKey === ADMIN_STAGE_KEY && (s.status === "active" || s.status === "inProgress"))).length
+          : undefined
+      }
     />
   );
 }

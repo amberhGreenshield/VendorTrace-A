@@ -2,11 +2,36 @@ import { AssessmentKey, Case, TeamKey, TEAM_LABELS } from "./schema.js";
 import { activateReadySeqOrders, isCaseFullyComplete } from "./hierarchy.js";
 
 /** Which team(s) are responsible for each assessment, used to decide when it flips to "completed". */
-const ASSESSMENT_OWNER_TEAMS: Record<AssessmentKey, TeamKey[]> = {
+export const ASSESSMENT_OWNER_TEAMS: Record<AssessmentKey, TeamKey[]> = {
   PIA: ["Privacy"],
   DataAIImpactAssessment: ["Data", "AI"],
-  UpguardAssessment: ["SecurityGovernance"],   // ← add this line
+  UpguardAssessment: ["SecurityGovernance"],
 };
+
+/**
+ * When an admin adds or removes a team from the hierarchy, the assessment
+ * that team owns follows it: adding Privacy means a PIA is now required,
+ * adding Data or AI means a Data & AI Impact Assessment is required, and so
+ * on. Removing the last owning team makes the assessment not required again.
+ *
+ * Only the assessments whose owner teams actually changed are returned, so
+ * an admin edit that doesn't touch Privacy never alters whether a PIA is
+ * required (the rules engine's original decision stands).
+ */
+export function assessmentChangesForHierarchyEdit(
+  stagesAfter: Pick<Case["stages"][number], "team" | "status">[],
+  addedTeams: TeamKey[],
+  removedTeams: TeamKey[]
+): { key: AssessmentKey; applicable: boolean }[] {
+  const changes: { key: AssessmentKey; applicable: boolean }[] = [];
+  for (const [key, owners] of Object.entries(ASSESSMENT_OWNER_TEAMS) as [AssessmentKey, TeamKey[]][]) {
+    const touched = owners.some((t) => addedTeams.includes(t) || removedTeams.includes(t));
+    if (!touched) continue;
+    const stillInHierarchy = stagesAfter.some((s) => owners.includes(s.team) && s.status !== "skipped");
+    changes.push({ key, applicable: stillInHierarchy });
+  }
+  return changes;
+}
 
 function refreshAssessmentStatuses(caseRecord: Case): void {
   for (const assessment of caseRecord.assessments) {

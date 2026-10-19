@@ -82,6 +82,11 @@ model Case {
 
   overallStatus OverallStatus @default(new)
 
+  // Stamped when an admin changes the review hierarchy from what the rules
+  // engine produced (PUT /api/cases/:id/hierarchy). Null = default hierarchy.
+  hierarchyEditedAt DateTime?
+  hierarchyEditedBy String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -114,6 +119,9 @@ model CaseAssessment {
   status AssessmentStatus @default(pending)
   fileUrl String?
   applicable Boolean @default(false) // whether THIS case's TPRM answers actually require it
+  // True when an admin's hierarchy change (e.g. adding Privacy) is what made
+  // this assessment required. Drives the "you now need a PIA/DIA" notice.
+  requiredByAdmin Boolean @default(false)
   note   String?
 
   @@unique([caseId, key])

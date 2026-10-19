@@ -25,6 +25,9 @@ usersRouter.get("/me", async (req, res) => {
     found: true,
     name: user.name,
     email: user.email,
+    role: user.role,
+    /** Can view the admin inbox and rearrange case hierarchies — see domain/adminAccess.ts. */
+    isCaseAdmin: user.active && user.role === "admin",
     teamMemberships: user.memberOf.map((m: (typeof user.memberOf)[number]) => ({
       teamId: m.teamId,
       teamName: m.team.name,
@@ -130,11 +133,16 @@ usersRouter.post("/me/profile", async (req, res) => {
     });
   }
 
+  // Never let the self-service role picker demote a case admin back to a
+  // plain team member / business owner.
+  const current = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  const nextRole = current?.role === "admin" ? "admin" : role === "team" ? "team_member" : "business_owner";
+
   const user = await prisma.user.upsert({
     where: { email: normalizedEmail },
     update: {
       name,
-      role: role === "team" ? "team_member" : "business_owner",
+      role: nextRole,
     },
     create: {
       name,

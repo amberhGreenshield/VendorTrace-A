@@ -4,6 +4,7 @@
 // engine here can be swapped for a real backend later with minimal changes.
 
 export type TeamKey =
+  | "Admin"
   | "PVM"
   | "BusinessArchitecture"
   | "Risk"
@@ -15,6 +16,7 @@ export type TeamKey =
   | "EnterpriseArchitecture";
 
 export const TEAM_LABELS: Record<TeamKey, string> = {
+  Admin: "Admin",
   PVM: "PVM",
   BusinessArchitecture: "Business Architecture",
   Risk: "Risk",
@@ -25,6 +27,23 @@ export const TEAM_LABELS: Record<TeamKey, string> = {
   SecurityArchitecture: "Security Architecture",
   EnterpriseArchitecture: "Enterprise Architecture",
 };
+
+/**
+ * The review teams an admin can place into a case's hierarchy. "Admin" is
+ * deliberately not here — the admin inbox is the fixed first stop, not a
+ * reviewer that can be moved around.
+ */
+export const ASSESSOR_TEAMS: TeamKey[] = [
+  "PVM",
+  "BusinessArchitecture",
+  "Risk",
+  "Privacy",
+  "Data",
+  "AI",
+  "SecurityGovernance",
+  "SecurityArchitecture",
+  "EnterpriseArchitecture",
+];
 
 export type StageStatus = "skipped" | "pending" | "active" | "inProgress" | "completed";
 
@@ -73,6 +92,8 @@ export interface CaseAssessment {
    * applicable ones ever move past "pending".
    */
   applicable: boolean;
+  /** True when an admin's hierarchy change is what made this assessment required. */
+  requiredByAdmin?: boolean;
   /** Extra context shown with the assessment card, e.g. explaining UpGuard isn't a SharePoint document. */
   note?: string;
 }
@@ -123,6 +144,10 @@ export interface Case {
 
   sharepointFolderUrl?: string;
   tprmFileUrl?: string;
+
+  /** Set when an admin has changed this case's review hierarchy from the default rules-engine output. */
+  hierarchyEditedAt?: string;
+  hierarchyEditedBy?: string;
 
   /** Overall case status derived from stages: "new" until first stage starts, "completed" once the last stage completes. */
   overallStatus: "new" | "inProgress" | "completed";
