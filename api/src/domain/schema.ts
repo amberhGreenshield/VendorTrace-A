@@ -92,6 +92,8 @@ export interface CaseAssessment {
    * applicable ones ever move past "pending".
    */
   applicable: boolean;
+  /** True when an admin's hierarchy change is what made this assessment required. */
+  requiredByAdmin?: boolean;
   /** Extra context shown with the assessment card, e.g. explaining UpGuard isn't a SharePoint document. */
   note?: string;
 }

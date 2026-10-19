@@ -355,10 +355,15 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
     }
     for (const change of assessmentChanges) {
       const fileUrl = newFileUrls.get(change.key);
+      const before = existing.assessments.find((a: any) => a.key === change.key);
+      // Flag it only when the edit is what made it required. If the rules
+      // engine already required it at intake, the BO knew from day one.
+      const requiredByAdmin = change.applicable ? (before?.applicable ? !!before.requiredByAdmin : true) : false;
       await tx.caseAssessment.upsert({
         where: { caseId_key: { caseId: existing.id, key: change.key } },
         update: {
           applicable: change.applicable,
+          requiredByAdmin,
           ...(fileUrl ? { fileUrl } : {}),
           ...(change.applicable ? { status: "pending" } : {}),
         },
@@ -368,6 +373,7 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
           label: assessmentLabel(change.key),
           status: "pending",
           applicable: change.applicable,
+          requiredByAdmin,
           fileUrl: fileUrl ?? null,
           note: assessmentNote(change.key) ?? null,
         },

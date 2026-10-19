@@ -119,6 +119,9 @@ model CaseAssessment {
   status AssessmentStatus @default(pending)
   fileUrl String?
   applicable Boolean @default(false) // whether THIS case's TPRM answers actually require it
+  // True when an admin's hierarchy change (e.g. adding Privacy) is what made
+  // this assessment required. Drives the "you now need a PIA/DIA" notice.
+  requiredByAdmin Boolean @default(false)
   note   String?
 
   @@unique([caseId, key])

@@ -19,6 +19,7 @@ export interface ApiCaseAssessment {
   status: "pending" | "inProgress" | "completed";
   fileUrl: string | null;
   applicable: boolean;
+  requiredByAdmin?: boolean;
   note?: string | null;
 }
 
@@ -196,6 +197,7 @@ export function mapApiCaseToCase(a: ApiCase): Case {
       status: asm.status,
       fileUrl: asm.fileUrl ?? undefined,
       applicable: asm.applicable,
+      requiredByAdmin: asm.requiredByAdmin ?? false,
       note: asm.note ?? undefined,
     })),
     // The API doesn't store a separate "completed forms" table — the TPRM

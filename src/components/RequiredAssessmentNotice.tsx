@@ -1,14 +1,14 @@
 import { Case } from "../lib/schema";
 
-// Prominent "you need to complete a PIA / DIA" call-out. Shown to the
-// business owner (and reviewers) whenever the case requires an assessment
-// that isn't finished yet — whether the rules engine required it at intake
-// or an admin added Privacy / Data / AI to the hierarchy later. Each one
-// links straight to the case's copy of the document in SharePoint.
+// Slim "you now need a PIA / DIA" notice. Only appears when an admin changed
+// the case's review hierarchy AND that change is what made the assessment
+// required (CaseAssessment.requiredByAdmin), and only until the assessment
+// is complete. Assessments the rules engine required at intake don't trigger
+// it — the business owner already sees those in "Assessments To Be Completed".
 
-const DOC_ASSESSMENTS: Record<string, { short: string; team: string; contact?: string }> = {
-  PIA: { short: "PIA", team: "Privacy" },
-  DataAIImpactAssessment: { short: "DIA", team: "Data & AI", contact: "data.ai.governance@greenshield.ca" },
+const DOC_ASSESSMENTS: Record<string, { short: string; team: string; template: string }> = {
+  PIA: { short: "PIA", team: "Privacy", template: "/templates/PIA_Template.docx" },
+  DataAIImpactAssessment: { short: "DIA", team: "Data / AI", template: "/templates/Data_AI_Impact_Assessment_Template.docx" },
 };
 
 interface Props {
@@ -17,72 +17,45 @@ interface Props {
 }
 
 export default function RequiredAssessmentNotice({ case_: c, audience }: Props) {
-  const outstanding = c.assessments.filter((a) => a.applicable && a.status !== "completed" && DOC_ASSESSMENTS[a.key]);
+  if (!c.hierarchyEditedAt) return null;
+  const outstanding = c.assessments.filter(
+    (a) => a.requiredByAdmin && a.applicable && a.status !== "completed" && DOC_ASSESSMENTS[a.key]
+  );
   if (outstanding.length === 0) return null;
 
   return (
-    <div style={{ margin: "16px 32px 0", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ margin: "10px 32px 0", display: "flex", flexDirection: "column", gap: 6 }}>
       {outstanding.map((a) => {
         const meta = DOC_ASSESSMENTS[a.key];
+        const link = a.fileUrl ?? meta.template;
         return (
           <div
             key={a.key}
             style={{
-              background: "#eff6ff", border: "1.5px solid #3b82f6", borderRadius: 10, padding: "14px 18px",
-              display: "flex", gap: 12, alignItems: "flex-start",
+              background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "6px 12px",
+              display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#1e40af", lineHeight: 1.4,
             }}
           >
-            <span style={{ fontSize: 22, lineHeight: 1 }}>📄</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#1e3a8a", marginBottom: 4 }}>
-                {a.label} required ({meta.short})
-              </div>
-              <div style={{ fontSize: 13, color: "#1e40af", lineHeight: 1.6 }}>
-                {audience === "businessOwner" ? (
-                  <>
-                    The {meta.team} team is part of this case's review, so you need to complete a{" "}
-                    <strong>{meta.short}</strong> for this vendor. It's linked to your case below — open it, fill it in, and the{" "}
-                    {meta.team} team will review it when the case reaches them.
-                  </>
-                ) : (
-                  <>
-                    This case requires a <strong>{meta.short}</strong> from the business owner ({c.businessOwner}). It's linked to the
-                    case below.
-                  </>
-                )}
-                {meta.contact && audience === "businessOwner" && (
-                  <>
-                    {" "}Questions? Contact <a href={`mailto:${meta.contact}`} style={{ color: "#1e3a8a" }}>{meta.contact}</a>.
-                  </>
-                )}
-              </div>
-              <div style={{ marginTop: 10 }}>
-                {a.fileUrl ? (
-                  <a
-                    href={a.fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 6, background: "#1e40af", color: "#fff", borderRadius: 7,
-                      padding: "7px 14px", fontSize: 12.5, fontWeight: 600, textDecoration: "none",
-                    }}
-                  >
-                    🔗 Open {meta.short} in SharePoint
-                  </a>
-                ) : (
-                  <span style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>
-                    The {meta.short} document link will appear here once the case's SharePoint folder is provisioned. Blank template:{" "}
-                    <a
-                      href={a.key === "PIA" ? "/templates/PIA_Template.docx" : "/templates/Data_AI_Impact_Assessment_Template.docx"}
-                      style={{ color: "#1e40af" }}
-                    >
-                      download
-                    </a>
-                    .
-                  </span>
-                )}
-              </div>
-            </div>
+            <span aria-hidden>📄</span>
+            <span style={{ flex: 1 }}>
+              {audience === "businessOwner" ? (
+                <>
+                  {meta.team} was added to this case's review — please complete a <strong>{meta.short}</strong>.
+                </>
+              ) : (
+                <>
+                  {meta.team} was added to the hierarchy — <strong>{meta.short}</strong> now required from {c.businessOwner}.
+                </>
+              )}
+            </span>
+            <a
+              href={link}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#1e40af", fontWeight: 600, textDecoration: "underline", whiteSpace: "nowrap" }}
+            >
+              {a.fileUrl ? `Open ${meta.short}` : `${meta.short} template`}
+            </a>
           </div>
         );
       })}

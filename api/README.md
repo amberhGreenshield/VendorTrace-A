@@ -57,7 +57,10 @@ hierarchy.
   Adding Data or AI makes the Data & AI Impact Assessment (DIA) required.
   Removing the last owning team un-requires it. When Graph is configured,
   the template is copied into the case's SharePoint folder and linked on the
-  case, and the business owner sees a "PIA/DIA required" banner with the link.
+  case. `CaseAssessment.requiredByAdmin` is set when an edit is what made
+  an assessment required. In that case only, the business owner sees a
+  one-line "please complete a PIA/DIA" notice with the link, until it's
+  done. Assessments the rules engine required at intake don't show it.
 - **Visibility:** `Case.hierarchyEditedAt/By` is stamped on every edit, and
   all case pages show the current hierarchy at the top with a "Customized by"
   tag.
