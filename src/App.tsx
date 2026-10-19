@@ -3,7 +3,7 @@ import { useMsal } from "@azure/msal-react";
 import { getAuthUser, setAuthUser as storeUser, clearAuthUser, UserProfile } from "@/lib/auth";
 import { Case } from "@/lib/schema";
 import { fetchAllCases, startCaseStage, completeCaseStage, saveCaseHierarchy } from "@/lib/caseStore";
-import { HierarchyEditStage } from "@/lib/apiClient";
+import { HierarchyEditStage, fetchMe } from "@/lib/apiClient";
 import { ADMIN_STAGE_KEY } from "@/lib/hierarchy";
 import { casesForTeam, teamKeyFromLabel, TeamViewCase } from "@/lib/viewAdapters";
 
@@ -47,6 +47,27 @@ export default function App() {
       .finally(() => { if (!cancelled) setCasesLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // The signed-in profile is cached in localStorage, so admin rights granted
+  // (or removed) after someone's first sign-in would never show up. Re-check
+  // them against the database whenever the app opens. Demo accounts and
+  // business owners without a DB record are left untouched.
+  useEffect(() => {
+    if (authPage !== "app" || !authUser?.email) return;
+    let cancelled = false;
+    fetchMe(authUser.email)
+      .then((me) => {
+        if (cancelled || !me.found) return;
+        const isCaseAdmin = me.isCaseAdmin === true;
+        const isAdmin = (me.teamMemberships ?? []).some((m) => m.isAdmin);
+        if (isCaseAdmin === !!authUser.isCaseAdmin && isAdmin === !!authUser.isAdmin) return;
+        const refreshed: UserProfile = { ...authUser, isCaseAdmin, isAdmin };
+        storeUser(refreshed);
+        setAuthUser(refreshed);
+      })
+      .catch(() => { /* API unreachable — keep the cached profile */ });
+    return () => { cancelled = true; };
+  }, [authPage, authUser]);
 
   useEffect(() => {
     if (authPage !== "app") return;
