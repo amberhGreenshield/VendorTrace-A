@@ -2,7 +2,8 @@ import { useState } from "react";
 import Header from "../components/Header";
 import DescriptionCard from "../components/DescriptionCard";
 import AssessmentSection from "../components/AssessmentSection";
-import StageProgressTracker from "../components/StageProgressTracker";
+import CaseHierarchyBanner from "../components/CaseHierarchyBanner";
+import RequiredAssessmentNotice from "../components/RequiredAssessmentNotice";
 import ConfirmCompleteModal from "../components/ConfirmCompleteModal";
 import { TeamViewCase } from "../lib/viewAdapters";
 
@@ -20,10 +21,7 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
       <Header onBack={onBack} title={"Case: " + c.caseNumber} subtitle={"Vendor: " + c.vendorName} />
-      <div style={{ padding: "20px 32px 0" }}>
-        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, marginBottom: 6 }}>REVIEW HIERARCHY</div>
-        <StageProgressTracker stages={c.raw.stages} />
-      </div>
+      <CaseHierarchyBanner case_={c.raw} />
       <div style={{ display: "flex", gap: 24, padding: "20px 32px 0", flexWrap: "wrap" }}>
         {[
           { label: "Business Owner", value: c.businessOwner },
@@ -56,6 +54,8 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
           and document links are not available yet.
         </div>
       )}
+
+      <RequiredAssessmentNotice case_={c.raw} audience="team" />
 
       {/* UpGuard Security Assessment notice — only shown when Security Governance is triggered */}
       {c.requiresUpGuard && (

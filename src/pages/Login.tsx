@@ -22,7 +22,23 @@ type Phase = "checkingSso" | "needsInteractiveSignIn" | "signingIn" | "chooseRol
 // to demo from any deployed environment. Once real SSO is live, either
 // delete this block or gate it behind something like
 // `import.meta.env.VITE_ENABLE_DEMO_LOGIN`.
-const DEMO_TEAM_KEYS = Object.keys(TEAM_LABELS) as TeamKey[];
+const DEMO_TEAM_KEYS = (Object.keys(TEAM_LABELS) as TeamKey[]).filter((k) => k !== "Admin");
+
+// Demo case admin. Uses Amber's real email so the API's admin check
+// (User.role = "admin", seeded by api/prisma/seed.ts) passes — this only
+// works against a database where that seed has run. Same no-token caveat as
+// every other demo login here.
+function demoAdminProfile(): UserProfile {
+  return {
+    accountId: "demo-case-admin",
+    name: "Amber Hashwani",
+    email: "amber.hashwani@greenshield.ca",
+    role: "team",
+    team: { id: -1, name: "PVM", memberCount: 1 },
+    isAdmin: true,
+    isCaseAdmin: true,
+  };
+}
 
 function demoTeamProfile(teamKey: TeamKey): UserProfile {
   return {
@@ -94,19 +110,39 @@ export default function Login({ onSuccess }: Props) {
     // has an admin already added them to a team?
     try {
       const me = await fetchMe(email);
-      if (me.found && me.teamMemberships && me.teamMemberships.length > 0) {
+      // "Admin" is the case-admin inbox, not a review team someone works
+      // from day to day — a case admin still signs in to their real team
+      // (e.g. PVM) and reaches the inbox from there.
+      const reviewMemberships = (me.teamMemberships ?? []).filter((m) => m.teamName !== "Admin");
+      if (me.found && reviewMemberships.length > 0) {
         // Provisioned team member — skip the role picker entirely, go
         // straight to their team. (If they're on multiple teams, this uses
         // the first one — switching between several is future work, see
         // ROADMAP.md.)
-        const membership = me.teamMemberships[0];
+        const membership = reviewMemberships[0];
         const profile: UserProfile = {
           accountId,
           name: me.name ?? name,
           email: me.email ?? email,
           role: "team",
           team: { id: membership.teamId, name: membership.teamName, memberCount: 0 },
-          isAdmin: me.teamMemberships.some((m) => m.isAdmin),
+          isAdmin: (me.teamMemberships ?? []).some((m) => m.isAdmin),
+          isCaseAdmin: me.isCaseAdmin === true,
+        };
+        setAuthUser(profile);
+        onSuccess(profile, false);
+        return;
+      }
+      if (me.found && me.isCaseAdmin) {
+        // Case admin with no review team yet — still needs the team view to reach the inbox.
+        const profile: UserProfile = {
+          accountId,
+          name: me.name ?? name,
+          email: me.email ?? email,
+          role: "team",
+          team: { id: -1, name: "Admin", memberCount: 1 },
+          isAdmin: true,
+          isCaseAdmin: true,
         };
         setAuthUser(profile);
         onSuccess(profile, false);
@@ -224,6 +260,20 @@ export default function Login({ onSuccess }: Props) {
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>Continue as Demo Business Owner</div>
                     <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Submit a new case and track it on your dashboard.</div>
+                  </button>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 8 }}>
+                    Case Admin
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleDemoLogin(demoAdminProfile())}
+                    style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 8, cursor: "pointer", border: "1.5px solid #cbd5e1", background: "#fff" }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>Continue as Amber Hashwani (Admin)</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>PVM team view plus the Admin Inbox and hierarchy editor.</div>
                   </button>
                 </div>
 

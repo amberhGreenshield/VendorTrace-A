@@ -101,6 +101,47 @@ export async function createCaseFolder(
   return { folderUrl: folder.webUrl, tprmFileUrl: tprmItem.webUrl, assessments };
 }
 
+/** Display label for an assessment key — used when an assessment row has to be created after the case already exists. */
+export function assessmentLabel(key: AssessmentKey): string {
+  return ASSESSMENT_TEMPLATES[key].label;
+}
+
+export function assessmentNote(key: AssessmentKey): string | undefined {
+  return ASSESSMENT_TEMPLATES[key].note;
+}
+
+/**
+ * Makes sure the blank template for `key` exists in an already-created case
+ * folder — used when an admin adds Privacy / Data / AI to a case after
+ * intake, so the PIA or Data & AI Impact Assessment the BO now has to
+ * complete is actually there for them to open.
+ *
+ * Returns the document's SharePoint URL, or null when Graph isn't
+ * configured yet (same "SharePoint pending" behaviour as case creation) or
+ * the assessment has no document (UpGuard).
+ */
+export async function ensureAssessmentDocument(legalName: string, key: AssessmentKey): Promise<string | null> {
+  const template = ASSESSMENT_TEMPLATES[key];
+  if (!template.fileName) return null;
+  if (!loadGraphConfig()) return null;
+
+  const folderName = slugify(legalName);
+  const targetPath = `${CASES_FOLDER_PATH}/${folderName}/${template.fileName}`;
+
+  // Already there (e.g. the rules engine required it at intake, admin removed the team, then re-added it).
+  try {
+    const existing = await getItemByPath(targetPath);
+    if (existing?.webUrl) return existing.webUrl;
+  } catch {
+    // not found — fall through and copy it in
+  }
+
+  const folder = await getItemByPath(`${CASES_FOLDER_PATH}/${folderName}`);
+  await copyItemToFolder(`${TEMPLATES_FOLDER_PATH}/${template.fileName}`, folder.id, template.fileName);
+  const item = await getItemByPath(targetPath);
+  return item.webUrl;
+}
+
 function createSharePointPending(requiredAssessmentKeys: AssessmentKey[]): CreatedCaseFolder {
   const assessments: CaseAssessment[] = ALL_ASSESSMENT_KEYS.map((key) => {
     const template = ASSESSMENT_TEMPLATES[key];

@@ -33,6 +33,39 @@ tampered client request can't create a bogus case.
   creates the (mocked) SharePoint folder, and saves the case
 - `POST /api/cases/:id/stages/:stageKey/start`
 - `POST /api/cases/:id/stages/:stageKey/complete` — body: `{ "completedBy": "Name" }`
+- `PUT /api/cases/:id/hierarchy` — **case admins only**. Body:
+  `{ "actingAdminEmail": "...", "stages": [{ "stageKey"?, "team", "label"?, "seqOrder" }] }`
+  — the full list of not-yet-started stages as the admin wants them. See
+  "Admin hierarchy editing" below.
+
+## Admin hierarchy editing
+
+Every new case now opens in an **Admin Review** stage (`admin-review`,
+step 0) instead of going straight to PVM / BA / Risk. Case admins see it in
+the **Admin Inbox**, can rearrange the hierarchy with drag and drop, then
+release it (completing `admin-review`), which activates step 1 of the edited
+hierarchy.
+
+- **Who is a case admin:** `User.role = "admin"`. Seeded for Amber Hashwani
+  only (`CASE_ADMINS` in `prisma/seed.ts`). This is separate from
+  `TeamMember.isAdmin`, which only controls adding people to teams.
+- **What can be edited:** only stages that haven't started. Anything active,
+  in progress or completed is locked. Always-required stages can be moved
+  but not removed. Any assessor team can be added, including a second pass
+  by the same team.
+- **Assessments follow their teams:** adding Privacy makes the PIA required.
+  Adding Data or AI makes the Data & AI Impact Assessment (DIA) required.
+  Removing the last owning team un-requires it. When Graph is configured,
+  the template is copied into the case's SharePoint folder and linked on the
+  case, and the business owner sees a "PIA/DIA required" banner with the link.
+- **Visibility:** `Case.hierarchyEditedAt/By` is stamped on every edit, and
+  all case pages show the current hierarchy at the top with a "Customized by"
+  tag.
+- **Deploy:** run `npx prisma migrate deploy` (adds the two columns and the
+  `Admin` team) and then `npm run prisma:seed` (grants Amber the role).
+  Cases created before this change have no `admin-review` stage. They
+  never appear in the inbox, but Amber can still edit their upcoming
+  stages from the "All Open Cases" tab.
 
 ## Running it
 

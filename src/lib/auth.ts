@@ -23,6 +23,14 @@ export interface UserProfile {
    * up fresh from the API on every sign-in, not something the user picks.
    */
   isAdmin?: boolean;
+  /**
+   * True only for case admins (User.role = "admin" in the database — just
+   * Amber for now, see api/prisma/seed.ts). Case admins get the Admin Inbox,
+   * where every new case lands first, and can rearrange a case's review
+   * hierarchy. Distinct from `isAdmin` above, which is only about adding
+   * people to teams.
+   */
+  isCaseAdmin?: boolean;
 }
 
 function loadProfiles(): Record<string, UserProfile> {

@@ -3,13 +3,47 @@ import multer from "multer";
 import { prisma } from "../db.js";
 import { parseTprmWorkbookBuffer, TprmParseError } from "../domain/tprmParser.js";
 import { evaluateRules } from "../domain/rulesEngine.js";
-import { buildCaseStages } from "../domain/hierarchy.js";
-import { createCaseFolder } from "../domain/sharepointService.js";
+import {
+  activateReadySeqOrders,
+  applyHierarchyEdit,
+  buildCaseStages,
+  HierarchyEditError,
+  HierarchyEditStage,
+  isAdminAddedStage,
+  isCaseFullyComplete,
+} from "../domain/hierarchy.js";
+import { assessmentChangesForHierarchyEdit } from "../domain/caseEngine.js";
+import { isCaseAdminEmail } from "../domain/adminAccess.js";
+import { assessmentLabel, assessmentNote, createCaseFolder, ensureAssessmentDocument } from "../domain/sharepointService.js";
 import { notifyCaseReadyForTeam } from "../domain/notificationService.js";
-import { AssessmentKey, TEAM_LABELS, TeamKey } from "../domain/schema.js";
+import { AssessmentKey, CaseStage, TEAM_LABELS, TeamKey } from "../domain/schema.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 export const casesRouter = Router();
+
+/**
+ * Emails every member of each team whose stage just became active. Teams are
+ * stored under their display name ("Business Architecture"), while stages
+ * carry the TeamKey ("BusinessArchitecture"), so this maps through
+ * TEAM_LABELS. Failures are logged, never thrown — the stage transition
+ * that triggered this has already been saved.
+ */
+async function notifyTeams(teamKeys: TeamKey[], caseNumber: string, vendorName: string): Promise<void> {
+  await Promise.all(
+    Array.from(new Set(teamKeys)).map(async (teamKey) => {
+      try {
+        const team = await prisma.team.findUnique({
+          where: { name: TEAM_LABELS[teamKey] },
+          include: { members: { include: { user: true } } },
+        });
+        const emails = team?.members.map((m: any) => m.user.email) ?? [];
+        await notifyCaseReadyForTeam({ teamName: TEAM_LABELS[teamKey], teamMemberEmails: emails, caseNumber, vendorName });
+      } catch (err) {
+        console.error(`Failed to send notification for team ${teamKey}:`, err);
+      }
+    })
+  );
+}
 
 /** Always reads the DB to find the next safe case number — no in-memory counter that resets on restart. */
 async function nextCaseNumber(): Promise<string> {
@@ -116,27 +150,9 @@ casesRouter.post("/", upload.single("tprmFile"), async (req, res) => {
 
     res.status(201).json(created);
 
-    // Notify whichever team(s) the case opens with (PVM, Business Architecture, Risk — fire-and-forget).
-    const activeStages = created.stages.filter((s: any) => s.status === "active");
-    await Promise.all(
-      activeStages.map(async (s: any) => {
-        try {
-          const team = await prisma.team.findUnique({
-            where: { name: s.team },
-            include: { members: { include: { user: true } } },
-          });
-          const emails = team?.members.map((m: any) => m.user.email) ?? [];
-          await notifyCaseReadyForTeam({
-            teamName: s.team,
-            teamMemberEmails: emails,
-            caseNumber: created.caseNumber,
-            vendorName: created.vendorName,
-          });
-        } catch (err) {
-          console.error(`Failed to send notification for team ${s.team}:`, err);
-        }
-      })
-    );
+    // Notify whichever team(s) the case opens with (the admin inbox — fire-and-forget).
+    const activeTeams = created.stages.filter((s: any) => s.status === "active").map((s: any) => s.team as TeamKey);
+    await notifyTeams(activeTeams, created.caseNumber, created.vendorName);
   } catch (err) {
     if (err instanceof TprmParseError) return res.status(422).json({ error: err.message });
     console.error(err);
@@ -181,7 +197,6 @@ casesRouter.post("/:id/stages/:stageKey/complete", async (req, res) => {
 
   // Re-run the cascade: activate whatever seqOrder is ready next.
   const allStages = await prisma.caseStage.findMany({ where: { caseId: req.params.id } });
-  const { activateReadySeqOrders, isCaseFullyComplete } = await import("../domain/hierarchy.js");
   const stageObjs = allStages.map((s: (typeof allStages)[number]) => ({ ...s, status: s.status as any }));
   const statusesBefore = new Map(stageObjs.map((s: any) => [s.stageKey, s.status]));
   activateReadySeqOrders(stageObjs as any);
@@ -207,25 +222,172 @@ casesRouter.post("/:id/stages/:stageKey/complete", async (req, res) => {
 
   // Email whichever team(s) the case just landed with. Failures here
   // shouldn't fail the request — the stage transition already succeeded.
-  await Promise.all(
-    newlyActivatedTeams.map(async (teamKey: TeamKey) => {
-      try {
-        const team = await prisma.team.findUnique({
-          where: { name: TEAM_LABELS[teamKey] },
-          include: { members: { include: { user: true } } },
-        });
-        const emails = team?.members.map((m: any) => m.user.email) ?? [];
-        await notifyCaseReadyForTeam({
-          teamName: TEAM_LABELS[teamKey],
-          teamMemberEmails: emails,
-          caseNumber: updated.caseNumber,
-          vendorName: updated.vendorName,
-        });
-      } catch (err) {
-        console.error(`Failed to send notification for team ${teamKey}:`, err);
-      }
-    })
-  );
+  await notifyTeams(newlyActivatedTeams, updated.caseNumber, updated.vendorName);
 
   res.json(updated);
+});
+
+/**
+ * PUT /api/cases/:id/hierarchy — an admin rearranges the review hierarchy.
+ *
+ * Body: {
+ *   actingAdminEmail: string,
+ *   stages: [{ stageKey?: string, team: TeamKey, label?: string, seqOrder: number }, ...]
+ * }
+ *
+ * `stages` is the complete list of NOT-yet-started stages as the admin wants
+ * them. Anything already active / in progress / completed is frozen and
+ * carried over untouched. Editable stages left out of the list are removed
+ * (rules-engine stages become "skipped"; admin-added ones are deleted).
+ * Stages without a `stageKey` are new additions.
+ *
+ * Side effects, in order:
+ *  1. Stages are rewritten and the cascade re-run — so if the case is past
+ *     the admin inbox and a team is added to the current step, that team
+ *     becomes active immediately and gets notified.
+ *  2. Assessments follow their teams: adding Privacy makes the PIA required
+ *     (and copies the PIA template into the case's SharePoint folder if Graph
+ *     is configured); adding Data or AI does the same for the Data & AI
+ *     Impact Assessment; removing the last owning team un-requires it.
+ *  3. `hierarchyEditedAt/By` is stamped on the case so every view can show
+ *     that the hierarchy was customized.
+ */
+casesRouter.put("/:id/hierarchy", async (req, res) => {
+  const { actingAdminEmail, stages: edit } = req.body as {
+    actingAdminEmail?: string;
+    stages?: HierarchyEditStage[];
+  };
+  if (!actingAdminEmail) return res.status(400).json({ error: "actingAdminEmail is required" });
+  if (!Array.isArray(edit)) return res.status(400).json({ error: "stages must be an array" });
+  if (!(await isCaseAdminEmail(actingAdminEmail))) {
+    return res.status(403).json({ error: "Only a case admin can change a review hierarchy." });
+  }
+
+  const existing = await prisma.case.findUnique({
+    where: { id: req.params.id },
+    include: { stages: true, assessments: true },
+  });
+  if (!existing) return res.status(404).json({ error: "Case not found" });
+  if (existing.overallStatus === "completed") {
+    return res.status(409).json({ error: "This case is already complete — its hierarchy can't be changed." });
+  }
+
+  const currentStages: CaseStage[] = existing.stages.map((s: (typeof existing.stages)[number]) => ({
+    stageKey: s.stageKey,
+    label: s.label,
+    team: s.team as TeamKey,
+    seqOrder: s.seqOrder,
+    status: s.status as CaseStage["status"],
+    activatedAt: s.activatedAt?.toISOString(),
+    completedAt: s.completedAt?.toISOString(),
+    completedBy: s.completedBy ?? undefined,
+  }));
+
+  let result;
+  try {
+    result = applyHierarchyEdit(currentStages, edit);
+  } catch (err) {
+    if (err instanceof HierarchyEditError) return res.status(422).json({ error: err.message });
+    throw err;
+  }
+
+  // Re-run the cascade on the new shape. For a case still in the admin
+  // inbox nothing changes (seq 0 is still active); for a case further along,
+  // a team dropped into the current step becomes active right away.
+  const statusesBefore = new Map(currentStages.map((s) => [s.stageKey, s.status]));
+  activateReadySeqOrders(result.stages);
+  const newlyActivatedTeams = result.stages
+    .filter((s) => statusesBefore.get(s.stageKey) !== "active" && s.status === "active")
+    .map((s) => s.team);
+
+  const addedTeams = result.addedStageKeys
+    .map((k) => result.stages.find((s) => s.stageKey === k)?.team)
+    .filter((t): t is TeamKey => !!t);
+  const removedTeams = result.removedStageKeys
+    .map((k) => currentStages.find((s) => s.stageKey === k)?.team)
+    .filter((t): t is TeamKey => !!t);
+  const assessmentChanges = assessmentChangesForHierarchyEdit(result.stages, addedTeams, removedTeams);
+
+  // Pull template documents into SharePoint for newly-required assessments
+  // before the transaction, since Graph calls are slow and can fail.
+  const newFileUrls = new Map<AssessmentKey, string | null>();
+  for (const change of assessmentChanges) {
+    if (!change.applicable) continue;
+    const row = existing.assessments.find((a: any) => a.key === change.key);
+    if (row?.fileUrl) continue;
+    try {
+      newFileUrls.set(change.key, await ensureAssessmentDocument(existing.vendorName, change.key));
+    } catch (err) {
+      console.error(`Could not copy the ${change.key} template into SharePoint for ${existing.caseNumber}:`, err);
+      newFileUrls.set(change.key, null);
+    }
+  }
+
+  const admin = await prisma.user.findUnique({ where: { email: actingAdminEmail.trim().toLowerCase() } });
+  const keysAfter = new Set(result.stages.map((s) => s.stageKey));
+  const deletedKeys = existing.stages
+    .map((s: any) => s.stageKey as string)
+    .filter((k: string) => !keysAfter.has(k) && isAdminAddedStage(k));
+
+  await prisma.$transaction(async (tx: any) => {
+    if (deletedKeys.length > 0) {
+      await tx.caseStage.deleteMany({ where: { caseId: existing.id, stageKey: { in: deletedKeys } } });
+    }
+    for (const s of result.stages) {
+      await tx.caseStage.upsert({
+        where: { caseId_stageKey: { caseId: existing.id, stageKey: s.stageKey } },
+        update: {
+          label: s.label,
+          seqOrder: s.seqOrder,
+          status: s.status,
+          activatedAt: s.activatedAt ? new Date(s.activatedAt) : null,
+        },
+        create: {
+          caseId: existing.id,
+          stageKey: s.stageKey,
+          label: s.label,
+          team: s.team,
+          seqOrder: s.seqOrder,
+          status: s.status,
+          activatedAt: s.activatedAt ? new Date(s.activatedAt) : null,
+        },
+      });
+    }
+    for (const change of assessmentChanges) {
+      const fileUrl = newFileUrls.get(change.key);
+      await tx.caseAssessment.upsert({
+        where: { caseId_key: { caseId: existing.id, key: change.key } },
+        update: {
+          applicable: change.applicable,
+          ...(fileUrl ? { fileUrl } : {}),
+          ...(change.applicable ? { status: "pending" } : {}),
+        },
+        create: {
+          caseId: existing.id,
+          key: change.key,
+          label: assessmentLabel(change.key),
+          status: "pending",
+          applicable: change.applicable,
+          fileUrl: fileUrl ?? null,
+          note: assessmentNote(change.key) ?? null,
+        },
+      });
+    }
+    await tx.case.update({
+      where: { id: existing.id },
+      data: {
+        overallStatus: isCaseFullyComplete(result.stages) ? "completed" : "inProgress",
+        hierarchyEditedAt: new Date(),
+        hierarchyEditedBy: admin?.name ?? actingAdminEmail,
+      },
+    });
+  });
+
+  const updated = await prisma.case.findUnique({
+    where: { id: existing.id },
+    include: { stages: true, assessments: true },
+  });
+  res.json(updated);
+
+  await notifyTeams(newlyActivatedTeams, existing.caseNumber, existing.vendorName);
 });

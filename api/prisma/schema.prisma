@@ -82,6 +82,11 @@ model Case {
 
   overallStatus OverallStatus @default(new)
 
+  // Stamped when an admin changes the review hierarchy from what the rules
+  // engine produced (PUT /api/cases/:id/hierarchy). Null = default hierarchy.
+  hierarchyEditedAt DateTime?
+  hierarchyEditedBy String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

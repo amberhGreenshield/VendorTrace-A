@@ -44,7 +44,16 @@ export function teamKeyFromLabel(label?: string): TeamKey | undefined {
 export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
   const results: TeamViewCase[] = [];
   for (const c of cases) {
-    const stage = c.stages.find((s) => s.team === team);
+    // A team can appear more than once if an admin added an extra review
+    // (e.g. "Data (Additional Review)"). Show whichever of its stages is in
+    // play right now; otherwise the most recently completed one.
+    const teamStages = c.stages.filter((s) => s.team === team);
+    const stage =
+      teamStages.find((s) => s.status === "active" || s.status === "inProgress") ??
+      teamStages
+        .filter((s) => s.status === "completed")
+        .sort((a, b) => b.seqOrder - a.seqOrder)[0] ??
+      teamStages[0];
     if (!stage) continue;
     if (stage.status === "pending" || stage.status === "skipped") continue;
 

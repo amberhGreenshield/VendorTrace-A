@@ -2,7 +2,7 @@ import { AssessmentKey, Case, TeamKey, TEAM_LABELS } from "./schema";
 import { activateReadySeqOrders, isCaseFullyComplete } from "./hierarchy";
 
 /** Which team(s) are responsible for each assessment, used to decide when it flips to "completed". */
-const ASSESSMENT_OWNER_TEAMS: Record<AssessmentKey, TeamKey[]> = {
+export const ASSESSMENT_OWNER_TEAMS: Record<AssessmentKey, TeamKey[]> = {
   PIA: ["Privacy"],
   DataAIImpactAssessment: ["Data", "AI"],
   UpguardAssessment: ["SecurityGovernance"],

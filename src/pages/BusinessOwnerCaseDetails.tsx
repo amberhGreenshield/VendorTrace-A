@@ -1,7 +1,8 @@
 import Header from "../components/Header";
 import DescriptionCard from "../components/DescriptionCard";
 import AssessmentSection from "../components/AssessmentSection";
-import StageProgressTracker from "../components/StageProgressTracker";
+import CaseHierarchyBanner from "../components/CaseHierarchyBanner";
+import RequiredAssessmentNotice from "../components/RequiredAssessmentNotice";
 import { Case } from "../lib/schema";
 import { currentStateLabel, assessmentsToCompleteList, completedFormsAndAssessments, requiresUpGuard } from "../lib/boViewHelpers";
 import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
@@ -18,10 +19,8 @@ export default function BusinessOwnerCaseDetails({ case_: c, onBack }: BusinessO
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
       <Header onBack={onBack} title={"Case: " + c.caseNumber} subtitle={"Vendor: " + c.vendorName} />
-      <div style={{ padding: "20px 32px 0" }}>
-        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, marginBottom: 6 }}>REVIEW HIERARCHY</div>
-        <StageProgressTracker stages={c.stages} />
-      </div>
+      <CaseHierarchyBanner case_={c} />
+      <RequiredAssessmentNotice case_={c} audience="businessOwner" />
       <div style={{ display: "flex", gap: 24, padding: "20px 32px 0", flexWrap: "wrap" }}>
         {[
           { label: "Business Sponsor", value: c.businessSponsor },

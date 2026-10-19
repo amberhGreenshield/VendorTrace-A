@@ -19,6 +19,7 @@ export interface ApiCaseAssessment {
   status: "pending" | "inProgress" | "completed";
   fileUrl: string | null;
   applicable: boolean;
+  note?: string | null;
 }
 
 export interface ApiCase {
@@ -37,6 +38,8 @@ export interface ApiCase {
   sharepointFolderUrl: string | null;
   tprmFileUrl: string | null;
   overallStatus: "new" | "inProgress" | "completed";
+  hierarchyEditedAt?: string | null;
+  hierarchyEditedBy?: string | null;
   createdAt: string;
   stages: ApiCaseStage[];
   assessments: ApiCaseAssessment[];
@@ -84,12 +87,33 @@ export function completeStage(caseId: string, stageKey: string, completedBy: str
   });
 }
 
+// ─── Admin hierarchy editing ────────────────────────────────────────────────
+
+/** One not-yet-started stage as the admin wants it. Omit `stageKey` for a brand-new stage. */
+export interface HierarchyEditStage {
+  stageKey?: string;
+  team: TeamKey;
+  label?: string;
+  seqOrder: number;
+}
+
+/** PUT /api/cases/:id/hierarchy — see the route's doc comment in api/src/routes/cases.ts for the rules. */
+export function saveHierarchy(caseId: string, actingAdminEmail: string, stages: HierarchyEditStage[]): Promise<ApiCase> {
+  return request<ApiCase>(`/api/cases/${caseId}/hierarchy`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actingAdminEmail, stages }),
+  });
+}
+
 // ─── User / team provisioning ───────────────────────────────────────────────
 
 export interface MeResponse {
   found: boolean;
   name?: string;
   email?: string;
+  role?: string;
+  isCaseAdmin?: boolean;
   teamMemberships?: { teamId: number; teamName: string; isAdmin: boolean }[];
 }
 
@@ -172,12 +196,15 @@ export function mapApiCaseToCase(a: ApiCase): Case {
       status: asm.status,
       fileUrl: asm.fileUrl ?? undefined,
       applicable: asm.applicable,
+      note: asm.note ?? undefined,
     })),
     // The API doesn't store a separate "completed forms" table — the TPRM
     // intake form is just the case's own tprmFileUrl, shown the same way.
     completedForms: a.tprmFileUrl ? [{ id: "tprm-intake", label: "TPRM Intake Form", fileUrl: a.tprmFileUrl }] : [],
     sharepointFolderUrl: a.sharepointFolderUrl ?? undefined,
     tprmFileUrl: a.tprmFileUrl ?? undefined,
+    hierarchyEditedAt: a.hierarchyEditedAt ?? undefined,
+    hierarchyEditedBy: a.hierarchyEditedBy ?? undefined,
     overallStatus: a.overallStatus,
   };
 }
