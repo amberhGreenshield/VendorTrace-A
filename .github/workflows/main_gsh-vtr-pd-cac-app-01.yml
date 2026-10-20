@@ -35,11 +35,18 @@ jobs:
           npm run build --if-present
           npm run test --if-present
 
+      # Zip first: upload-artifact drops Unix file permissions, which left
+      # node_modules/.bin/* and Prisma's engines non-executable on Azure
+      # ("prisma: permission denied"). A zip keeps them.
+      - name: Zip artifact for deployment
+        working-directory: ./api
+        run: zip -qr ../release.zip .
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: ./api
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -50,6 +57,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
+
+      - name: Unzip artifact for deployment
+        run: unzip -q release.zip && rm release.zip
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp

@@ -1,6 +1,15 @@
 import { AssessmentKey, Case, TeamKey, TEAM_LABELS } from "./schema";
 import { activateReadySeqOrders, isCaseFullyComplete } from "./hierarchy";
 
+/**
+ * Whether an assessment counts as done for display and reminders: the
+ * business owner marked it complete, or the team that owns it has already
+ * finished its review (so the BO is never chased for something signed off).
+ */
+export function isAssessmentComplete(a: { boCompletedAt?: string | Date | null; status: string }): boolean {
+  return !!a.boCompletedAt || a.status === "completed";
+}
+
 /** Which team(s) are responsible for each assessment, used to decide when it flips to "completed". */
 export const ASSESSMENT_OWNER_TEAMS: Record<AssessmentKey, TeamKey[]> = {
   PIA: ["Privacy"],

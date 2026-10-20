@@ -133,6 +133,45 @@ recomputed rather than stored, a case an admin adds a team to moves out of
 that team's "Other Open Cases" on its own. The app refreshes cases every
 60 seconds and whenever the window regains focus.
 
+## Business-owner assessments (PIA / DIA / UpGuard)
+
+- **Mark complete:** on their case page the business owner clicks
+  **Mark complete** on an assessment once they've finished it
+  (`POST /api/cases/:id/assessments/:key/complete`, with `reopen` to undo).
+  Allowed for the case's business owner (matched by the email captured at
+  intake, or by name on older cases) and for case admins.
+- **What happens:** it moves to "Completed Forms / Assessments" for every
+  team on the case, reminders stop, and the owning team(s) are emailed:
+  Privacy for the PIA, Data and/or AI for the DIA, and Security Governance
+  for UpGuard. Only owner teams that are part of the case's hierarchy are
+  emailed, falling back to all owners if none are. An assessment also counts
+  as done once its owning team has finished its review, so the BO is never
+  chased for something already signed off.
+- **Reminders:** 7 days after an assessment is assigned (at intake, or when
+  an admin's edit makes it required), the BO gets one email listing
+  everything outstanding on that case, then another every 7 days until it's
+  marked complete. The job runs inside the API (shortly after start, then
+  hourly) and is safe to run repeatedly or on several instances.
+  - `REMINDER_FIRST_AFTER_DAYS` (default 7), `REMINDER_REPEAT_EVERY_DAYS`
+    (default 7; set to 1 for daily follow-ups), and `REMINDERS_ENABLED=false`
+    to turn it off.
+  - If the App Service isn't set to **Always On**, it sleeps when idle and
+    reminders wait until it wakes. Turn on Always On, or call
+    `POST /api/jobs/assessment-reminders` with header `x-job-secret:
+    $JOB_SECRET` from a scheduler.
+  - `APP_URL` (optional) adds a link to the site in the emails.
+- **Emails are still mocked:** `notificationService.sendEmail` only logs.
+  Nothing is delivered until it's connected to Graph `sendMail`, Azure
+  Communication Services or SendGrid (see that file).
+
+## Database migrations
+
+Pending migrations are applied automatically when the API starts
+(`src/jobs/migrateOnStart.ts` runs `prisma migrate deploy`), so merging a
+pull request with a migration is all it takes. If it fails, the error is in
+the App Service log stream and the API still starts. Set
+`MIGRATE_ON_START=false` to manage migrations by hand.
+
 ## SharePoint integration (real, with mock fallback)
 
 `src/domain/sharepointService.ts` calls real Microsoft Graph endpoints once

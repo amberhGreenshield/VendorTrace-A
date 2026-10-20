@@ -68,6 +68,9 @@ model Case {
   vendorName  String
   description String
   businessOwner    String
+  // Where reminders go. Captured from the BO's sign-in when the case is
+  // created; backfilled for older cases where the name matched one user.
+  businessOwnerEmail String?
   businessSponsor  String
   supplier         String
   arrangementType  String
@@ -122,6 +125,15 @@ model CaseAssessment {
   // True when an admin's hierarchy change (e.g. adding Privacy) is what made
   // this assessment required. Drives the "you now need a PIA/DIA" notice.
   requiredByAdmin Boolean @default(false)
+  // When the BO was first asked to complete it (case creation, or when an
+  // admin's hierarchy change made it required). Starts the reminder clock.
+  requiredSince   DateTime?
+  // Set when the business owner marks it complete on their side.
+  boCompletedAt   DateTime?
+  boCompletedBy   String?
+  // Reminder bookkeeping (first at requiredSince + 7d, then every 7d).
+  lastReminderAt  DateTime?
+  reminderCount   Int @default(0)
   note   String?
 
   @@unique([caseId, key])

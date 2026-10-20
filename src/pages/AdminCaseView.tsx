@@ -9,6 +9,7 @@ import { Case } from "../lib/schema";
 import { ADMIN_STAGE_KEY } from "../lib/hierarchy";
 import { ApiError, HierarchyEditStage } from "../lib/apiClient";
 import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
+import { assessmentsToCompleteList, completedFormsAndAssessments } from "../lib/boViewHelpers";
 
 interface Props {
   case_: Case;
@@ -177,12 +178,8 @@ export default function AdminCaseView({ case_: c, onBack, onSaveHierarchy, onRel
 
       <div style={{ display: "flex", gap: 24, padding: "20px 32px 0", alignItems: "flex-start", flexWrap: "wrap" }}>
         <DescriptionCard text={c.description} />
-        <AssessmentSection title="Completed Forms" items={c.completedForms} columns={2} />
-        <AssessmentSection
-          title="Required Assessments"
-          items={c.assessments.filter((a) => a.applicable).map((a) => ({ id: a.key, label: a.label, fileUrl: a.fileUrl, note: a.note }))}
-          columns={2}
-        />
+        <AssessmentSection title="Completed Forms / Assessments" items={completedFormsAndAssessments(c)} columns={2} />
+        <AssessmentSection title="Required Assessments" items={assessmentsToCompleteList(c)} columns={2} />
       </div>
     </div>
   );
