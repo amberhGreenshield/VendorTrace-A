@@ -42,11 +42,16 @@ export interface ApiCase {
   hierarchyEditedAt?: string | null;
   hierarchyEditedBy?: string | null;
   createdAt: string;
+  updatedAt?: string;
   stages: ApiCaseStage[];
   assessments: ApiCaseAssessment[];
 }
 
-class ApiError extends Error {}
+export class ApiError extends Error {
+  constructor(message: string, public status?: number, public code?: string) {
+    super(message);
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
@@ -57,13 +62,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let code: string | undefined;
     try {
       const body = await res.json();
       if (body?.error) message = body.error;
+      if (body?.code) code = body.code;
     } catch {
       // response wasn't JSON — keep the generic message
     }
-    throw new ApiError(message);
+    throw new ApiError(message, res.status, code);
   }
   return (await res.json()) as T;
 }
@@ -99,11 +106,16 @@ export interface HierarchyEditStage {
 }
 
 /** PUT /api/cases/:id/hierarchy — see the route's doc comment in api/src/routes/cases.ts for the rules. */
-export function saveHierarchy(caseId: string, actingAdminEmail: string, stages: HierarchyEditStage[]): Promise<ApiCase> {
+export function saveHierarchy(
+  caseId: string,
+  actingAdminEmail: string,
+  stages: HierarchyEditStage[],
+  expectedUpdatedAt?: string
+): Promise<ApiCase> {
   return request<ApiCase>(`/api/cases/${caseId}/hierarchy`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ actingAdminEmail, stages }),
+    body: JSON.stringify({ actingAdminEmail, stages, expectedUpdatedAt }),
   });
 }
 
@@ -205,6 +217,7 @@ export function mapApiCaseToCase(a: ApiCase): Case {
     completedForms: a.tprmFileUrl ? [{ id: "tprm-intake", label: "TPRM Intake Form", fileUrl: a.tprmFileUrl }] : [],
     sharepointFolderUrl: a.sharepointFolderUrl ?? undefined,
     tprmFileUrl: a.tprmFileUrl ?? undefined,
+    updatedAt: a.updatedAt,
     hierarchyEditedAt: a.hierarchyEditedAt ?? undefined,
     hierarchyEditedBy: a.hierarchyEditedBy ?? undefined,
     overallStatus: a.overallStatus,

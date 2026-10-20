@@ -1,7 +1,16 @@
 import { Case, CompletedForm, TeamKey, TEAM_LABELS } from "./schema";
 import { nextReviewTeam, onboardingDurationDays } from "./caseEngine";
 
-export type LegacyStage = "new" | "inProgress" | "completed";
+/**
+ * Which tab of a team's dashboard a case belongs in:
+ *  - new / inProgress — it's this team's turn (not started / started)
+ *  - upcoming         — this team is in the hierarchy but it hasn't reached them yet
+ *  - completed        — this team's part is done
+ *  - other            — open case this team isn't part of (view only, for visibility)
+ * Re-derived from the live hierarchy every time, so when an admin adds a
+ * team to a case it moves out of "other" on the next refresh by itself.
+ */
+export type LegacyStage = "new" | "inProgress" | "upcoming" | "completed" | "other";
 
 export interface TeamViewCase {
   id: string;
@@ -26,6 +35,8 @@ export interface TeamViewCase {
   supplier?: string;
   riskTier?: string;
   nextReview?: string;
+  /** Team(s) holding the case right now, e.g. "PVM + Risk". */
+  currentlyWith: string;
   onboardingDuration?: string;
   raw: Case;
 }
@@ -40,25 +51,43 @@ export function teamKeyFromLabel(label?: string): TeamKey | undefined {
   return LABEL_TO_TEAM_KEY[label];
 }
 
-/** Cases relevant to a team right now: their stage is active, in progress, or already completed (for the Completed tab). Pending/skipped stages aren't this team's concern yet. */
+/** Team(s) the case is sitting with right now, e.g. "PVM + Business Architecture". */
+export function currentlyWithLabel(c: Case): string {
+  if (c.overallStatus === "completed") return "Completed";
+  const teams = Array.from(new Set(c.stages.filter((s) => s.status === "active" || s.status === "inProgress").map((s) => TEAM_LABELS[s.team])));
+  return teams.length ? teams.join(" + ") : "—";
+}
+
+/** True while the case is still waiting in the admin inbox (not released to any review team yet). */
+export function isInAdminInbox(c: Case): boolean {
+  return c.stages.some((s) => s.team === "Admin" && (s.status === "active" || s.status === "inProgress"));
+}
+
+/**
+ * Every case a team should see on its dashboard, each tagged with the one
+ * tab it belongs in. Cases still in the admin inbox are left out entirely —
+ * the admin hasn't settled their hierarchy yet.
+ */
 export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
   const results: TeamViewCase[] = [];
   for (const c of cases) {
-    // A team can appear more than once if an admin added an extra review
-    // (e.g. "Data (Additional Review)"). Show whichever of its stages is in
-    // play right now; otherwise the most recently completed one.
-    const teamStages = c.stages.filter((s) => s.team === team);
-    const stage =
-      teamStages.find((s) => s.status === "active" || s.status === "inProgress") ??
-      teamStages
-        .filter((s) => s.status === "completed")
-        .sort((a, b) => b.seqOrder - a.seqOrder)[0] ??
-      teamStages[0];
-    if (!stage) continue;
-    if (stage.status === "pending" || stage.status === "skipped") continue;
+    if (isInAdminInbox(c)) continue;
 
-    const legacyStage: LegacyStage =
-      stage.status === "completed" ? "completed" : stage.status === "inProgress" ? "inProgress" : "new";
+    // A team can appear more than once if an admin added an extra review
+    // (e.g. "Data (Additional Review)"). Precedence: the one in play now →
+    // one still to come → the most recently finished one.
+    const teamStages = c.stages.filter((s) => s.team === team && s.status !== "skipped");
+    const current = teamStages.find((s) => s.status === "active" || s.status === "inProgress");
+    const upcoming = teamStages.filter((s) => s.status === "pending").sort((a, b) => a.seqOrder - b.seqOrder)[0];
+    const done = teamStages.filter((s) => s.status === "completed").sort((a, b) => b.seqOrder - a.seqOrder)[0];
+    const stage = current ?? upcoming ?? done;
+
+    let tab: LegacyStage;
+    if (current) tab = current.status === "inProgress" ? "inProgress" : "new";
+    else if (upcoming) tab = "upcoming";
+    else if (done) tab = "completed";
+    else if (c.overallStatus !== "completed") tab = "other";
+    else continue; // finished case this team was never part of
 
     // Only show assessments that are actually required for this case.
     // Non-applicable assessments are hidden to avoid confusion.
@@ -74,8 +103,8 @@ export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
       id: c.id,
       caseNumber: c.caseNumber,
       vendorName: c.vendorName,
-      stage: legacyStage,
-      stageKey: stage.stageKey,
+      stage: tab,
+      stageKey: stage?.stageKey ?? "",
       teamName: TEAM_LABELS[team],
       description: c.description,
       completedForms: c.completedForms,
@@ -86,6 +115,7 @@ export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
       supplier: c.supplier,
       riskTier: c.riskTier,
       nextReview: nextReviewTeam(c),
+      currentlyWith: currentlyWithLabel(c),
       onboardingDuration: onboardingDurationDays(c),
       raw: c,
     });

@@ -145,6 +145,9 @@ export interface Case {
   sharepointFolderUrl?: string;
   tprmFileUrl?: string;
 
+  /** Last time anything on the case changed — used to stop an admin saving a hierarchy edit on top of changes they haven't seen. */
+  updatedAt?: string;
+
   /** Set when an admin has changed this case's review hierarchy from the default rules-engine output. */
   hierarchyEditedAt?: string;
   hierarchyEditedBy?: string;

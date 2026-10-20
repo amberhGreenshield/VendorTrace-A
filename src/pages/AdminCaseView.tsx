@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Header from "../components/Header";
 import DescriptionCard from "../components/DescriptionCard";
 import AssessmentSection from "../components/AssessmentSection";
@@ -7,13 +7,13 @@ import HierarchyEditor from "../components/HierarchyEditor";
 import RequiredAssessmentNotice from "../components/RequiredAssessmentNotice";
 import { Case } from "../lib/schema";
 import { ADMIN_STAGE_KEY } from "../lib/hierarchy";
-import { HierarchyEditStage } from "../lib/apiClient";
+import { ApiError, HierarchyEditStage } from "../lib/apiClient";
 import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
 
 interface Props {
   case_: Case;
   onBack: () => void;
-  onSaveHierarchy: (caseId: string, stages: HierarchyEditStage[]) => Promise<void>;
+  onSaveHierarchy: (caseId: string, stages: HierarchyEditStage[], basedOnUpdatedAt?: string) => Promise<void>;
   /** Completes the Admin Review stage, which hands the case to step 1 of its (possibly edited) hierarchy. */
   onRelease: (caseId: string) => Promise<void>;
 }
@@ -24,20 +24,38 @@ export default function AdminCaseView({ case_: c, onBack, onSaveHierarchy, onRel
   const [releasing, setReleasing] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [editorResetKey, setEditorResetKey] = useState(0);
+  const [staleFromServer, setStaleFromServer] = useState(false);
+  // Once the editor is back to a clean state (saved, undone or reloaded), any
+  // earlier error about the old draft no longer applies.
+  const handleDirtyChange = useCallback((d: boolean) => {
+    setDirty(d);
+    if (!d) {
+      setError("");
+      setStaleFromServer(false);
+    }
+  }, []);
 
   const adminStage = c.stages.find((s) => s.stageKey === ADMIN_STAGE_KEY);
   const inInbox = adminStage?.status === "active" || adminStage?.status === "inProgress";
   const completed = c.overallStatus === "completed";
 
-  async function handleSave(stages: HierarchyEditStage[]) {
+  async function handleSave(stages: HierarchyEditStage[], basedOnUpdatedAt?: string) {
     setSaving(true);
     setError("");
     setSavedMsg("");
     try {
-      await onSaveHierarchy(c.id, stages);
+      await onSaveHierarchy(c.id, stages, basedOnUpdatedAt);
+      setEditorResetKey((k) => k + 1);
       setSavedMsg(inInbox ? "Hierarchy saved. Release the case when you're ready." : "Hierarchy saved — the case will follow the new order from here.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save the hierarchy.");
+      if (err instanceof ApiError && err.code === "STALE_CASE") {
+        // The editor shows its own "case changed — Load latest" banner for this.
+        setStaleFromServer(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Couldn't save the hierarchy.");
+      }
     } finally {
       setSaving(false);
     }
@@ -94,13 +112,14 @@ export default function AdminCaseView({ case_: c, onBack, onSaveHierarchy, onRel
           </div>
           <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "#64748b", lineHeight: 1.6 }}>
             Steps run left to right; teams in the same step review in parallel. Drag stages between steps, drop a team from the
-            palette to add it, or ✕ to remove one. Locked stages have already started and can't move. Adding Privacy requires a
-            PIA, and adding Data or AI requires a DIA — the business owner is shown the requirement and the document link.
+            palette to add it, or ✕ to remove one. 🔒 marks finished or started work, which can't move. A team dropped into the
+            step marked <strong>IN REVIEW</strong> gets the case in their inbox as soon as you save. Adding Privacy requires a PIA,
+            and adding Data or AI requires a DIA — the business owner is shown the requirement and the document link.
           </p>
           {completed ? (
             <div style={{ fontSize: 13, color: "#94a3b8" }}>This case is complete — its hierarchy can no longer be changed.</div>
           ) : (
-            <HierarchyEditor stages={c.stages} saving={saving} error={error} onSave={handleSave} />
+            <HierarchyEditor stages={c.stages} updatedAt={c.updatedAt} resetKey={editorResetKey} staleFromServer={staleFromServer} saving={saving} error={error} onSave={handleSave} onDirtyChange={handleDirtyChange} />
           )}
           {savedMsg && !error && (
             <div style={{ marginTop: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#166534" }}>
@@ -121,7 +140,9 @@ export default function AdminCaseView({ case_: c, onBack, onSaveHierarchy, onRel
             <div style={{ flex: 1, minWidth: 260 }}>
               <div style={{ fontWeight: 700, fontSize: 14 }}>Release to review teams</div>
               <div style={{ fontSize: 12.5, opacity: 0.85 }}>
-                Moves the case out of your inbox and notifies step 1 ({nextReviewTeam(c)}). Save any hierarchy changes first.
+                {dirty
+                  ? "You have unsaved hierarchy changes — save or undo them before releasing."
+                  : <>Moves the case out of your inbox and notifies step 1 ({nextReviewTeam(c)}).</>}
               </div>
             </div>
             {confirmRelease ? (
@@ -143,7 +164,9 @@ export default function AdminCaseView({ case_: c, onBack, onSaveHierarchy, onRel
             ) : (
               <button
                 onClick={() => setConfirmRelease(true)}
-                style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: "#fff", color: "#0f4c3a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                disabled={dirty}
+                title={dirty ? "Save or undo your hierarchy changes first" : undefined}
+                style={{ padding: "9px 18px", borderRadius: 8, border: "none", background: dirty ? "#cbd5e1" : "#fff", color: "#0f4c3a", fontWeight: 700, fontSize: 13, cursor: dirty ? "not-allowed" : "pointer" }}
               >
                 Release case →
               </button>

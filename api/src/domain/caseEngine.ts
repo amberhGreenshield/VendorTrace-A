@@ -33,6 +33,36 @@ export function assessmentChangesForHierarchyEdit(
   return changes;
 }
 
+/**
+ * What each required assessment's status should be, given where its owner
+ * teams' stages are: completed once every (non-skipped) owner stage is done,
+ * in progress while any owner stage is with its team, pending otherwise —
+ * including going BACK to pending if an admin adds another pass by the owner
+ * team after the assessment was completed.
+ *
+ * Returns only the assessments whose status should change.
+ */
+export function assessmentStatusChanges(
+  stages: Pick<Case["stages"][number], "team" | "status">[],
+  assessments: { key: string; applicable: boolean; status: string }[]
+): { key: AssessmentKey; status: "pending" | "inProgress" | "completed" }[] {
+  const changes: { key: AssessmentKey; status: "pending" | "inProgress" | "completed" }[] = [];
+  for (const a of assessments) {
+    if (!a.applicable) continue;
+    const owners = ASSESSMENT_OWNER_TEAMS[a.key as AssessmentKey];
+    if (!owners) continue;
+    const ownerStages = stages.filter((s) => owners.includes(s.team) && s.status !== "skipped");
+    if (ownerStages.length === 0) continue;
+    const next = ownerStages.every((s) => s.status === "completed")
+      ? "completed"
+      : ownerStages.some((s) => s.status === "active" || s.status === "inProgress")
+        ? "inProgress"
+        : "pending";
+    if (next !== a.status) changes.push({ key: a.key as AssessmentKey, status: next });
+  }
+  return changes;
+}
+
 function refreshAssessmentStatuses(caseRecord: Case): void {
   for (const assessment of caseRecord.assessments) {
     // Not required by this case's TPRM answers — leave it as a blank
