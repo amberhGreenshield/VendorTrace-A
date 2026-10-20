@@ -1,5 +1,6 @@
 import { Case, CompletedForm, TeamKey, TEAM_LABELS } from "./schema";
 import { nextReviewTeam, onboardingDurationDays } from "./caseEngine";
+import { assessmentsToCompleteList, completedFormsAndAssessments, requiresUpGuard } from "./boViewHelpers";
 
 /**
  * Which tab of a team's dashboard a case belongs in:
@@ -89,15 +90,10 @@ export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
     else if (c.overallStatus !== "completed") tab = "other";
     else continue; // finished case this team was never part of
 
-    // Only show assessments that are actually required for this case.
-    // Non-applicable assessments are hidden to avoid confusion.
-    const ourAssessments = c.assessments
-      .filter((a) => a.applicable)
-      .map((a) => ({
-        id: a.key,
-        label: a.label,
-        fileUrl: a.fileUrl,
-      }));
+    // Required assessments the BO still owes → "Required Assessments";
+    // once the BO marks one complete (or its owning team finishes) it moves
+    // to "Completed Forms / Assessments" for every team viewing the case.
+    const ourAssessments = assessmentsToCompleteList(c);
 
     results.push({
       id: c.id,
@@ -107,9 +103,9 @@ export function casesForTeam(cases: Case[], team: TeamKey): TeamViewCase[] {
       stageKey: stage?.stageKey ?? "",
       teamName: TEAM_LABELS[team],
       description: c.description,
-      completedForms: c.completedForms,
+      completedForms: completedFormsAndAssessments(c),
       ourAssessments,
-      requiresUpGuard: c.stages.some((s) => s.team === "SecurityGovernance" && s.status !== "skipped"),
+      requiresUpGuard: requiresUpGuard(c),
       businessOwner: c.businessOwner,
       businessSponsor: c.businessSponsor,
       supplier: c.supplier,

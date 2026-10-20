@@ -20,6 +20,9 @@ export interface ApiCaseAssessment {
   fileUrl: string | null;
   applicable: boolean;
   requiredByAdmin?: boolean;
+  requiredSince?: string | null;
+  boCompletedAt?: string | null;
+  boCompletedBy?: string | null;
   note?: string | null;
 }
 
@@ -29,6 +32,7 @@ export interface ApiCase {
   vendorName: string;
   description: string;
   businessOwner: string;
+  businessOwnerEmail?: string | null;
   businessSponsor: string;
   supplier: string;
   arrangementType: string;
@@ -119,6 +123,22 @@ export function saveHierarchy(
   });
 }
 
+// ─── Business owner assessment completion ──────────────────────────────────
+
+/** Business owner marks a PIA / DIA / UpGuard complete on their side ("complete"), or undoes it ("reopen"). */
+export function updateAssessment(
+  caseId: string,
+  key: string,
+  action: "complete" | "reopen",
+  acting: { email: string; name: string }
+): Promise<ApiCase> {
+  return request<ApiCase>(`/api/cases/${caseId}/assessments/${encodeURIComponent(key)}/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actingEmail: acting.email, actingName: acting.name }),
+  });
+}
+
 // ─── User / team provisioning ───────────────────────────────────────────────
 
 export interface MeResponse {
@@ -185,6 +205,7 @@ export function mapApiCaseToCase(a: ApiCase): Case {
     vendorName: a.vendorName,
     description: a.description,
     businessOwner: a.businessOwner,
+    businessOwnerEmail: a.businessOwnerEmail ?? undefined,
     businessSponsor: a.businessSponsor,
     supplier: a.supplier,
     arrangementType: a.arrangementType,
@@ -210,6 +231,9 @@ export function mapApiCaseToCase(a: ApiCase): Case {
       fileUrl: asm.fileUrl ?? undefined,
       applicable: asm.applicable,
       requiredByAdmin: asm.requiredByAdmin ?? false,
+      requiredSince: asm.requiredSince ?? undefined,
+      boCompletedAt: asm.boCompletedAt ?? undefined,
+      boCompletedBy: asm.boCompletedBy ?? undefined,
       note: asm.note ?? undefined,
     })),
     // The API doesn't store a separate "completed forms" table — the TPRM

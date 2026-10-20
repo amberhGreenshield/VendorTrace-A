@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import { getAuthUser, setAuthUser as storeUser, clearAuthUser, UserProfile } from "@/lib/auth";
 import { Case } from "@/lib/schema";
-import { fetchAllCases, startCaseStage, completeCaseStage, saveCaseHierarchy } from "@/lib/caseStore";
+import { fetchAllCases, startCaseStage, completeCaseStage, saveCaseHierarchy, updateCaseAssessment } from "@/lib/caseStore";
 import { ApiError, HierarchyEditStage, fetchMe } from "@/lib/apiClient";
 import { ADMIN_STAGE_KEY } from "@/lib/hierarchy";
 import { casesForTeam, teamKeyFromLabel, TeamViewCase } from "@/lib/viewAdapters";
@@ -174,6 +174,13 @@ export default function App() {
     setCases((prev) => prev.map((c) => (c.id === caseId ? updated : c)));
   }
 
+  // Business owner marks a PIA / DIA / UpGuard complete (or undoes it).
+  // Errors propagate so the page can show them next to the button.
+  async function handleMarkAssessment(caseId: string, key: string, action: "complete" | "reopen") {
+    const updated = await updateCaseAssessment(caseId, key, action, { email: authUser?.email ?? "", name: authUser?.name ?? "" });
+    setCases((prev) => prev.map((c) => (c.id === caseId ? updated : c)));
+  }
+
   function handleCaseCreated(newCase: Case) {
     setCases((prev) => [newCase, ...prev]);
     setBoPage("dashboard");
@@ -222,7 +229,9 @@ export default function App() {
     if (boPage === "caseDetails" && boSelectedCaseId) {
       const boCase = boCases.find((c) => c.id === boSelectedCaseId);
       if (boCase) {
-        return <BusinessOwnerCaseDetails case_={boCase} onBack={() => setBoPage("dashboard")} />;
+        return (
+          <BusinessOwnerCaseDetails case_={boCase} onBack={() => setBoPage("dashboard")} onMarkAssessment={handleMarkAssessment} />
+        );
       }
     }
     if (boPage === "dashboard") {

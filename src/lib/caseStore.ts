@@ -34,3 +34,13 @@ export async function saveCaseHierarchy(
   const updated = await api.saveHierarchy(caseId, actingAdminEmail, stages, expectedUpdatedAt);
   return api.mapApiCaseToCase(updated);
 }
+
+export async function updateCaseAssessment(
+  caseId: string,
+  key: string,
+  action: "complete" | "reopen",
+  acting: { email: string; name: string }
+): Promise<Case> {
+  const updated = await api.updateAssessment(caseId, key, action, acting);
+  return api.mapApiCaseToCase(updated);
+}

@@ -13,10 +13,10 @@ import {
   isAdminAddedStage,
   isCaseFullyComplete,
 } from "../domain/hierarchy.js";
-import { assessmentChangesForHierarchyEdit, assessmentStatusChanges } from "../domain/caseEngine.js";
+import { ASSESSMENT_OWNER_TEAMS, assessmentChangesForHierarchyEdit, assessmentStatusChanges } from "../domain/caseEngine.js";
 import { isCaseAdminEmail } from "../domain/adminAccess.js";
 import { assessmentLabel, assessmentNote, createCaseFolder, ensureAssessmentDocument } from "../domain/sharepointService.js";
-import { notifyCaseReadyForTeam } from "../domain/notificationService.js";
+import { notifyAssessmentCompleted, notifyAssessmentReopened, notifyCaseReadyForTeam } from "../domain/notificationService.js";
 import { AssessmentKey, CaseStage, TEAM_LABELS, TeamKey } from "../domain/schema.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -133,6 +133,7 @@ casesRouter.post("/", upload.single("tprmFile"), async (req, res) => {
         vendorName: facts.legalName,
         description: facts.description,
         businessOwner,
+        businessOwnerEmail: businessOwnerEmail?.trim().toLowerCase() || null,
         businessSponsor: facts.contractOwner,
         supplier: facts.legalName,
         arrangementType: facts.arrangementType,
@@ -160,6 +161,8 @@ casesRouter.post("/", upload.single("tprmFile"), async (req, res) => {
             status: a.status,
             fileUrl: a.fileUrl,
             applicable: a.applicable,
+            // Starts the 7-day reminder clock for anything the BO must complete.
+            requiredSince: a.applicable ? new Date() : null,
           })),
         },
       },
@@ -385,11 +388,18 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
       // Flag it only when the edit is what made it required. If the rules
       // engine already required it at intake, the BO knew from day one.
       const requiredByAdmin = change.applicable ? (before?.applicable ? !!before.requiredByAdmin : true) : false;
+      // Newly required → start the reminder clock fresh; no longer required → stop it.
+      const clock = change.applicable
+        ? before?.applicable
+          ? {}
+          : { requiredSince: new Date(), lastReminderAt: null, reminderCount: 0 }
+        : { requiredSince: null, lastReminderAt: null };
       await tx.caseAssessment.upsert({
         where: { caseId_key: { caseId: existing.id, key: change.key } },
         update: {
           applicable: change.applicable,
           requiredByAdmin,
+          ...clock,
           ...(fileUrl ? { fileUrl } : {}),
           ...(change.applicable ? { status: "pending" } : {}),
         },
@@ -400,6 +410,7 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
           status: "pending",
           applicable: change.applicable,
           requiredByAdmin,
+          requiredSince: change.applicable ? new Date() : null,
           fileUrl: fileUrl ?? null,
           note: assessmentNote(change.key) ?? null,
         },
@@ -425,4 +436,92 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
   res.json(updated);
 
   await notifyTeams(newlyActivatedTeams, existing.caseNumber, existing.vendorName);
+});
+
+
+// ─── Business owner marks an assessment complete ────────────────────────────
+
+/**
+ * Who may mark a case's assessments complete: its business owner (matched by
+ * the email captured at intake, or by name on older cases that predate that),
+ * or a case admin acting on their behalf. Same no-token caveat as the rest of
+ * this API (ROADMAP #1).
+ */
+async function canActForBusinessOwner(c: { businessOwner: string; businessOwnerEmail?: string | null }, email?: string, name?: string) {
+  const e = email?.trim().toLowerCase();
+  if (e && c.businessOwnerEmail && e === c.businessOwnerEmail.toLowerCase()) return true;
+  if (!c.businessOwnerEmail && name && name.trim() === c.businessOwner) return true;
+  return isCaseAdminEmail(e);
+}
+
+/**
+ * The owner teams to tell about a BO's assessment update: those that are
+ * part of this case's hierarchy (e.g. only Data, not AI, if AI isn't
+ * reviewing this vendor). If none are, fall back to all owner teams so the
+ * update never goes nowhere.
+ */
+function ownerTeamsToNotify(key: AssessmentKey, stages: { team: string; status: string }[]): TeamKey[] {
+  const owners = ASSESSMENT_OWNER_TEAMS[key] ?? [];
+  const involved = owners.filter((t) => stages.some((s) => s.team === t && s.status !== "skipped"));
+  return involved.length ? involved : owners;
+}
+
+async function teamEmails(teamKey: TeamKey): Promise<string[]> {
+  const team = await prisma.team.findUnique({
+    where: { name: TEAM_LABELS[teamKey] },
+    include: { members: { include: { user: true } } },
+  });
+  return team?.members.map((m: any) => m.user.email) ?? [];
+}
+
+/**
+ * POST /api/cases/:id/assessments/:key/complete   { actingEmail, actingName }
+ * POST /api/cases/:id/assessments/:key/reopen     { actingEmail, actingName }
+ *
+ * "complete" records that the business owner has finished the PIA / DIA /
+ * UpGuard on their side: it moves to every team's completed section, stops
+ * reminders, and emails the owning team(s). "reopen" undoes that (e.g. a
+ * mis-click, or the BO needs to revise it) and tells the same teams.
+ * Both are idempotent.
+ */
+casesRouter.post("/:id/assessments/:key/:action(complete|reopen)", async (req, res) => {
+  const { actingEmail, actingName } = req.body as { actingEmail?: string; actingName?: string };
+  const { id, key, action } = req.params as { id: string; key: AssessmentKey; action: "complete" | "reopen" };
+
+  const c = await prisma.case.findUnique({ where: { id }, include: { stages: true, assessments: true } });
+  if (!c) return res.status(404).json({ error: "Case not found" });
+  const a = c.assessments.find((x: any) => x.key === key);
+  if (!a) return res.status(404).json({ error: "Assessment not found on this case" });
+  if (!a.applicable) return res.status(409).json({ error: `The ${a.label} isn't required for this case.` });
+  if (!(await canActForBusinessOwner(c, actingEmail, actingName))) {
+    return res.status(403).json({ error: "Only this case's business owner can update its assessments." });
+  }
+
+  const by = actingName?.trim() || actingEmail || "Business owner";
+  const alreadyThere = action === "complete" ? !!a.boCompletedAt : !a.boCompletedAt;
+  if (!alreadyThere) {
+    await prisma.caseAssessment.update({
+      where: { caseId_key: { caseId: id, key } },
+      data:
+        action === "complete"
+          ? { boCompletedAt: new Date(), boCompletedBy: by }
+          : // Reopened: restart the 7-day cycle from now rather than reminding immediately.
+            { boCompletedAt: null, boCompletedBy: null, lastReminderAt: new Date() },
+    });
+  }
+
+  const updated = await prisma.case.findUnique({ where: { id }, include: { stages: true, assessments: true } });
+  res.json(updated);
+
+  if (alreadyThere) return; // nothing changed — don't re-email anyone
+  for (const teamKey of ownerTeamsToNotify(key, c.stages)) {
+    try {
+      const emails = await teamEmails(teamKey);
+      const common = { teamName: TEAM_LABELS[teamKey], teamMemberEmails: emails, caseNumber: c.caseNumber, vendorName: c.vendorName, assessmentLabel: a.label };
+      if (action === "complete") await notifyAssessmentCompleted({ ...common, completedBy: by });
+      else await notifyAssessmentReopened({ ...common, reopenedBy: by });
+    } catch (err) {
+      console.error(`Failed to notify ${teamKey} about ${key} on ${c.caseNumber}:`, err);
+    }
+  }
 });

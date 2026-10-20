@@ -5,9 +5,11 @@ interface AssessmentSectionProps {
   title: string;
   items: CompletedForm[];
   columns?: number;
+  /** Optional per-item control (see AssessmentCard's `action`). */
+  renderAction?: (item: CompletedForm) => React.ReactNode;
 }
 
-export default function AssessmentSection({ title, items, columns = 2 }: AssessmentSectionProps) {
+export default function AssessmentSection({ title, items, columns = 2, renderAction }: AssessmentSectionProps) {
   return (
     <div style={{ flex: 1 }}>
       <div style={{
@@ -27,7 +29,7 @@ export default function AssessmentSection({ title, items, columns = 2 }: Assessm
           </div>
         ) : (
           items.map((item) => (
-            <AssessmentCard key={item.id} label={item.label} fileUrl={item.fileUrl} note={item.note} />
+            <AssessmentCard key={item.id} label={item.label} fileUrl={item.fileUrl} note={item.note} action={renderAction?.(item)} />
           ))
         )}
       </div>

@@ -3,9 +3,11 @@ interface AssessmentCardProps {
   fileUrl?: string;
   pending?: boolean;
   note?: string;
+  /** Optional control under the card text (e.g. the BO's "Undo"). Clicks on it don't open the document. */
+  action?: React.ReactNode;
 }
 
-export default function AssessmentCard({ label, fileUrl, pending, note }: AssessmentCardProps) {
+export default function AssessmentCard({ label, fileUrl, pending, note, action }: AssessmentCardProps) {
   return (
     <div
       onClick={() => fileUrl && window.open(fileUrl, "_blank")}
@@ -31,6 +33,7 @@ export default function AssessmentCard({ label, fileUrl, pending, note }: Assess
       {label}
       {fileUrl && <span style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>🔗 Open in SharePoint</span>}
       {note && <span style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic" }}>{note}</span>}
+      {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
     </div>
   );
 }

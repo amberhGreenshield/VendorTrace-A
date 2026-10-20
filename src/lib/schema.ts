@@ -94,6 +94,11 @@ export interface CaseAssessment {
   applicable: boolean;
   /** True when an admin's hierarchy change is what made this assessment required. */
   requiredByAdmin?: boolean;
+  /** ISO time the business owner was asked to complete it — starts the 7-day reminder clock. */
+  requiredSince?: string;
+  /** ISO time the business owner marked it complete on their side (and who). */
+  boCompletedAt?: string;
+  boCompletedBy?: string;
   /** Extra context shown with the assessment card, e.g. explaining UpGuard isn't a SharePoint document. */
   note?: string;
 }
@@ -128,6 +133,8 @@ export interface Case {
   vendorName: string;
   description: string;
   businessOwner: string;
+  /** Where assessment reminders are sent. Missing on some older cases. */
+  businessOwnerEmail?: string;
   businessSponsor: string;
   supplier: string;
   arrangementType: string;

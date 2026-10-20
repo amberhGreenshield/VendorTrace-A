@@ -1,8 +1,10 @@
+import { useState } from "react";
 import Header from "../components/Header";
 import DescriptionCard from "../components/DescriptionCard";
 import AssessmentSection from "../components/AssessmentSection";
 import CaseHierarchyBanner from "../components/CaseHierarchyBanner";
 import RequiredAssessmentNotice from "../components/RequiredAssessmentNotice";
+import BoAssessmentTasks from "../components/BoAssessmentTasks";
 import { Case } from "../lib/schema";
 import { currentStateLabel, assessmentsToCompleteList, completedFormsAndAssessments, requiresUpGuard } from "../lib/boViewHelpers";
 import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
@@ -10,9 +12,20 @@ import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
 interface BusinessOwnerCaseDetailsProps {
   case_: Case;
   onBack: () => void;
+  /** Marks a PIA / DIA / UpGuard complete on the BO's side, or undoes it. */
+  onMarkAssessment: (caseId: string, key: string, action: "complete" | "reopen") => Promise<void>;
 }
 
-export default function BusinessOwnerCaseDetails({ case_: c, onBack }: BusinessOwnerCaseDetailsProps) {
+export default function BusinessOwnerCaseDetails({ case_: c, onBack, onMarkAssessment }: BusinessOwnerCaseDetailsProps) {
+  const [undoError, setUndoError] = useState("");
+  async function undo(key: string) {
+    setUndoError("");
+    try {
+      await onMarkAssessment(c.id, key, "reopen");
+    } catch (err) {
+      setUndoError(err instanceof Error ? err.message : "Couldn't undo that.");
+    }
+  }
   const assessmentsToComplete = assessmentsToCompleteList(c);
   const needsUpGuard = requiresUpGuard(c);
 
@@ -102,7 +115,7 @@ export default function BusinessOwnerCaseDetails({ case_: c, onBack }: BusinessO
               <div style={{ fontSize: 13, color: "#78350f", lineHeight: 1.6 }}>
                 Based on the TPRM answers, this vendor requires an <strong>Upguard Third Party Posture Assessment</strong>.
                 Please contact the <strong>Security Governance team</strong> to initiate the assessment.
-                The review cannot be considered complete until this is done.
+                Once it's done, click <strong>Mark complete</strong> on it below so they're notified.
               </div>
             </div>
           </div>
@@ -111,11 +124,25 @@ export default function BusinessOwnerCaseDetails({ case_: c, onBack }: BusinessO
 
       <div style={{ display: "flex", gap: 24, padding: "16px 32px 0", alignItems: "flex-start", flexWrap: "wrap" }}>
         <DescriptionCard text={c.description} />
-        <AssessmentSection title="Completed Forms / Assessments" items={completedFormsAndAssessments(c)} columns={2} />
-        {assessmentsToComplete.length > 0 && (
-          <AssessmentSection title="Assessments To Be Completed" items={assessmentsToComplete} columns={2} />
-        )}
+        <AssessmentSection
+          title="Completed Forms / Assessments"
+          items={completedFormsAndAssessments(c)}
+          columns={2}
+          renderAction={(item) =>
+            c.assessments.find((a) => a.key === item.id)?.boCompletedAt ? (
+              <button
+                onClick={() => undo(item.id)}
+                title="Un-mark this assessment as complete (the reviewing team will be told)"
+                style={{ marginTop: 2, border: "none", background: "transparent", color: "#64748b", fontSize: 10.5, textDecoration: "underline", cursor: "pointer", padding: 0 }}
+              >
+                Undo
+              </button>
+            ) : null
+          }
+        />
+        <BoAssessmentTasks case_={c} onMark={(key, action) => onMarkAssessment(c.id, key, action)} />
       </div>
+      {undoError && <div style={{ padding: "8px 32px 0", fontSize: 12, color: "#dc2626" }}>{undoError}</div>}
       {assessmentsToComplete.length > 0 && (
         <div style={{ padding: "8px 32px 24px", fontSize: 12, color: "#64748b" }}>
           📎 Click any assessment card above to open the document in SharePoint. Contact{" "}

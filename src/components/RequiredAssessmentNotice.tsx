@@ -1,4 +1,5 @@
 import { Case } from "../lib/schema";
+import { isAssessmentComplete } from "../lib/caseEngine";
 
 // Slim "you now need a PIA / DIA" notice. Only appears when an admin changed
 // the case's review hierarchy AND that change is what made the assessment
@@ -19,7 +20,7 @@ interface Props {
 export default function RequiredAssessmentNotice({ case_: c, audience }: Props) {
   if (!c.hierarchyEditedAt) return null;
   const outstanding = c.assessments.filter(
-    (a) => a.requiredByAdmin && a.applicable && a.status !== "completed" && DOC_ASSESSMENTS[a.key]
+    (a) => a.requiredByAdmin && a.applicable && !isAssessmentComplete(a) && DOC_ASSESSMENTS[a.key]
   );
   if (outstanding.length === 0) return null;
 
