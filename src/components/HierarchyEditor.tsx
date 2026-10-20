@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ASSESSOR_TEAMS, CaseStage, TeamKey, TEAM_LABELS } from "../lib/schema";
-import { isFrozenStage, STAGE_DEFINITIONS } from "../lib/hierarchy";
+import { hierarchyFrontier, isFrontierJoinable, isFrozenStage, STAGE_DEFINITIONS } from "../lib/hierarchy";
 import { HierarchyEditStage } from "../lib/apiClient";
 
 // ─── Drag-and-drop hierarchy editor (case admins only) ──────────────────────
@@ -8,8 +8,10 @@ import { HierarchyEditStage } from "../lib/apiClient";
 //   • drag a stage chip to another step, or onto a "+" gap to create a new step
 //   • drag a team from the palette into any step / gap to add it
 //   • remove a stage with ✕ (unless it's always required)
-// Stages that have already started (active / in progress / completed) are
-// locked — they render greyed with a 🔒 and can't be dragged.
+// Work that has started (in progress / completed) and the Admin Review stage
+// are locked (🔒). A team that has the case but hasn't clicked Start yet can
+// still be moved or removed. While a step is under review, teams can be
+// dropped INTO it and land in their inbox right away on save.
 // Nothing is saved until "Save hierarchy" is pressed; the server re-validates.
 
 const ALWAYS_REQUIRED = new Set(STAGE_DEFINITIONS.filter((d) => d.alwaysRequired).map((d) => d.key));
@@ -39,7 +41,7 @@ type DragPayload = { kind: "stage"; uid: string } | { kind: "team"; team: TeamKe
 const STATUS_STYLE: Record<CaseStage["status"], { bg: string; border: string; color: string; text: string }> = {
   completed: { bg: "#dcfce7", border: "#86efac", color: "#166534", text: "Complete" },
   inProgress: { bg: "#dbeafe", border: "#93c5fd", color: "#1e40af", text: "In progress" },
-  active: { bg: "#fef3c7", border: "#fcd34d", color: "#92400e", text: "Current" },
+  active: { bg: "#fef3c7", border: "#fcd34d", color: "#92400e", text: "With team — not started" },
   pending: { bg: "#fff", border: "#cbd5e1", color: "#0f4c3a", text: "Upcoming" },
   skipped: { bg: "#f8fafc", border: "#e2e8f0", color: "#94a3b8", text: "Not in hierarchy" },
 };
@@ -65,47 +67,99 @@ function normalize(draft: DraftStage[]): DraftStage[] {
   return draft.map((d) => ({ ...d, seqOrder: map.get(d.seqOrder)! }));
 }
 
-interface HierarchyEditorProps {
-  stages: CaseStage[];
-  saving: boolean;
-  error?: string;
-  onSave: (stages: HierarchyEditStage[]) => void;
+function serialize(d: DraftStage[]) {
+  return d
+    .filter((s) => !s.frozen)
+    .map((s) => ({ stageKey: s.stageKey, team: s.team, seqOrder: s.seqOrder }))
+    .sort((a, b) => a.seqOrder - b.seqOrder || String(a.stageKey).localeCompare(String(b.stageKey)));
 }
 
-export default function HierarchyEditor({ stages, saving, error, onSave }: HierarchyEditorProps) {
-  const initial = useMemo(() => normalize(toDraft(stages)), [stages]);
+/** Everything about a hierarchy that matters for editing — used to tell a real change from a no-op refresh. */
+function signature(list: CaseStage[]): string {
+  return JSON.stringify(list.map((x) => [x.stageKey, x.team, x.status, x.seqOrder, x.label]).sort());
+}
+
+interface HierarchyEditorProps {
+  stages: CaseStage[];
+  /** The case's updatedAt for the `stages` passed in — sent back with the save so the server can refuse an edit built on an old version. */
+  updatedAt?: string;
+  saving: boolean;
+  error?: string;
+  onSave: (stages: HierarchyEditStage[], basedOnUpdatedAt?: string) => void;
+  /** Set by the parent when the server refused a save because the case had changed (409 STALE_CASE). */
+  staleFromServer?: boolean;
+  /** Bumped by the parent after a successful save — the editor then adopts the saved version as its new starting point. */
+  resetKey?: number;
+  /** Tells the parent whether there are unsaved changes (used to block "Release" until they're saved). */
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+export default function HierarchyEditor({ stages, updatedAt, saving, error, onSave, onDirtyChange, resetKey = 0, staleFromServer = false }: HierarchyEditorProps) {
+  // `base` is the version of the case the admin is editing. The app also
+  // refreshes cases in the background (every minute / on focus), which hands
+  // us a new `stages` array even when nothing changed, so only react when the
+  // hierarchy itself changed:
+  //  - no unsaved edits → quietly move to the latest
+  //  - unsaved edits    → keep them, but warn (saving would be refused as stale)
+  const [base, setBase] = useState(() => ({ sig: signature(stages), stages, updatedAt }));
+  const initial = useMemo(() => normalize(toDraft(base.stages)), [base.stages]);
   const [draft, setDraft] = useState<DraftStage[]>(initial);
+  const [staleWhileEditing, setStaleWhileEditing] = useState(false);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const newCounter = useRef(0);
 
-  // Reset if the case reloads underneath us (e.g. after a save).
-  const [lastStages, setLastStages] = useState(stages);
-  if (lastStages !== stages) {
-    setLastStages(stages);
-    setDraft(initial);
+  const dirty = JSON.stringify(serialize(draft)) !== JSON.stringify(serialize(initial));
+  const incomingSig = signature(stages);
+  const [seenResetKey, setSeenResetKey] = useState(resetKey);
+  if (resetKey !== seenResetKey) {
+    // Our own save just landed — start fresh from what was saved.
+    setSeenResetKey(resetKey);
+    setBase({ sig: incomingSig, stages, updatedAt });
+    setDraft(normalize(toDraft(stages)));
+    if (staleWhileEditing) setStaleWhileEditing(false);
+  } else if (saving) {
+    // Mid-save: the case is about to change because of us; don't flag it.
+  } else if (incomingSig !== base.sig) {
+    if (dirty) {
+      if (!staleWhileEditing) setStaleWhileEditing(true);
+    } else {
+      setBase({ sig: incomingSig, stages, updatedAt });
+      setDraft(normalize(toDraft(stages)));
+      if (staleWhileEditing) setStaleWhileEditing(false);
+    }
+  } else if (base.updatedAt !== updatedAt) {
+    // Same hierarchy, newer timestamp (e.g. after our own save) — track it silently.
+    setBase({ sig: incomingSig, stages, updatedAt });
+  }
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+
+  function loadLatest() {
+    setBase({ sig: incomingSig, stages, updatedAt });
+    setDraft(normalize(toDraft(stages)));
+    setStaleWhileEditing(false);
   }
 
+  // Columns are renumbered 0..n for display, so the frontier here is a column
+  // index. `realFrontier` is the same step in the case's own numbering —
+  // that's what the server expects back (see handleSave).
   const frontier = useMemo(() => {
     const frozen = draft.filter((d) => d.frozen);
     return frozen.length ? Math.max(...frozen.map((d) => d.seqOrder)) : -1;
   }, [draft]);
+  const realFrontier = useMemo(() => hierarchyFrontier(base.stages), [base.stages]);
+  /** The step under review can take extra teams (never the Admin Review step). */
+  const frontierJoinable = useMemo(() => isFrontierJoinable(base.stages), [base.stages]);
+  const canDropAt = (targetSeq: number) => targetSeq > frontier || (targetSeq === frontier && frontierJoinable);
 
   const steps = useMemo(() => Array.from(new Set(draft.map((d) => d.seqOrder))).sort((a, b) => a - b), [draft]);
-  const dirty = JSON.stringify(serialize(draft)) !== JSON.stringify(serialize(initial));
 
-  function serialize(d: DraftStage[]) {
-    return d
-      .filter((s) => !s.frozen)
-      .map((s) => ({ stageKey: s.stageKey, team: s.team, seqOrder: s.seqOrder }))
-      .sort((a, b) => a.seqOrder - b.seqOrder || String(a.stageKey).localeCompare(String(b.stageKey)));
-  }
 
   // ── Drop handling ─────────────────────────────────────────────────────────
   // A "target" is either an existing step (drop joins it, runs in parallel)
   // or a gap *before* a step (drop creates a new step there). Gaps are
   // encoded as half-steps (seq - 0.5) then normalized away.
   function dropAt(payload: DragPayload, targetSeq: number) {
-    if (targetSeq <= frontier) return; // can't place into or before work that has already started
+    if (!canDropAt(targetSeq)) return; // can't place before (or into a locked) step
     const uid = `new-${newCounter.current++}`;
     setDraft((prev) => {
       let next: DraftStage[];
@@ -138,7 +192,7 @@ export default function HierarchyEditor({ stages, saving, error, onSave }: Hiera
   }
 
   function dropProps(id: string, targetSeq: number) {
-    const allowed = targetSeq > frontier;
+    const allowed = canDropAt(targetSeq);
     return {
       onDragOver: (e: React.DragEvent) => {
         if (!allowed) return;
@@ -161,10 +215,14 @@ export default function HierarchyEditor({ stages, saving, error, onSave }: Hiera
   }
 
   function handleSave() {
+    // Translate display columns back to the case's own step numbers: the
+    // frontier column maps to the real frontier step, later columns to
+    // anything after it (the server renumbers those consecutively).
     onSave(
       draft
         .filter((d) => !d.frozen)
-        .map((d) => ({ stageKey: d.stageKey, team: d.team, label: d.label, seqOrder: d.seqOrder }))
+        .map((d) => ({ stageKey: d.stageKey, team: d.team, label: d.label, seqOrder: d.seqOrder - frontier + realFrontier })),
+      base.updatedAt
     );
   }
 
@@ -215,7 +273,9 @@ export default function HierarchyEditor({ stages, saving, error, onSave }: Hiera
       <div style={{ display: "flex", alignItems: "stretch", gap: 0, overflowX: "auto", padding: "4px 2px 8px" }}>
         {steps.map((seq, i) => {
           const items = draft.filter((d) => d.seqOrder === seq);
-          const lockedStep = seq <= frontier;
+          const lockedStep = seq < frontier || (seq === frontier && !frontierJoinable);
+          // The step that currently holds the case (any team handed it / working on it).
+          const reviewStep = items.some((d) => d.team !== "Admin" && (d.status === "active" || d.status === "inProgress"));
           const gapId = `gap-${seq}`;
           const colId = `col-${seq}`;
           return (
@@ -237,7 +297,12 @@ export default function HierarchyEditor({ stages, saving, error, onSave }: Hiera
               >
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", display: "flex", justifyContent: "space-between" }}>
                   <span>STEP {i + 1}</span>
-                  {lockedStep && <span title="This step has already started">🔒</span>}
+                  {lockedStep && <span title="This step is finished or is the admin inbox">🔒</span>}
+                  {reviewStep && (
+                    <span title="Teams dropped here get the case right away" style={{ color: "#b45309", fontWeight: 600 }}>
+                      IN REVIEW
+                    </span>
+                  )}
                 </div>
                 {items.map((d) => (
                   <StageChip key={d.uid} stage={d} onRemove={!d.frozen && !(d.stageKey && ALWAYS_REQUIRED.has(d.stageKey)) ? () => remove(d.uid) : undefined} />
@@ -266,6 +331,21 @@ export default function HierarchyEditor({ stages, saving, error, onSave }: Hiera
         </div>
       )}
 
+      {(staleWhileEditing || staleFromServer) && (
+        <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 8, padding: "8px 12px", fontSize: 12.5, color: "#92400e", display: "flex", gap: 10, alignItems: "center" }}>
+          <span style={{ flex: 1 }}>
+            ⚠️ This case changed while you were editing (a team started or finished a review). Your changes are based on the
+            older version and can't be saved as-is.
+          </span>
+          <button
+            onClick={loadLatest}
+            style={{ border: "1px solid #f59e0b", background: "#fff", color: "#92400e", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+          >
+            Load latest
+          </button>
+        </div>
+      )}
+
       {error && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#dc2626" }}>{error}</div>
       )}
@@ -282,7 +362,7 @@ export default function HierarchyEditor({ stages, saving, error, onSave }: Hiera
           {saving ? "Saving…" : "Save hierarchy"}
         </button>
         <button
-          onClick={() => setDraft(initial)}
+          onClick={loadLatest}
           disabled={!dirty || saving}
           style={{
             padding: "10px 18px", borderRadius: 8, border: "1.5px solid #cbd5e1", background: "#fff", fontWeight: 600, fontSize: 13,

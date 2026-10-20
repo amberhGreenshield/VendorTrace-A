@@ -7,12 +7,13 @@ import {
   activateReadySeqOrders,
   applyHierarchyEdit,
   buildCaseStages,
+  cascadeAfterEdit,
   HierarchyEditError,
   HierarchyEditStage,
   isAdminAddedStage,
   isCaseFullyComplete,
 } from "../domain/hierarchy.js";
-import { assessmentChangesForHierarchyEdit } from "../domain/caseEngine.js";
+import { assessmentChangesForHierarchyEdit, assessmentStatusChanges } from "../domain/caseEngine.js";
 import { isCaseAdminEmail } from "../domain/adminAccess.js";
 import { assessmentLabel, assessmentNote, createCaseFolder, ensureAssessmentDocument } from "../domain/sharepointService.js";
 import { notifyCaseReadyForTeam } from "../domain/notificationService.js";
@@ -43,6 +44,23 @@ async function notifyTeams(teamKeys: TeamKey[], caseNumber: string, vendorName: 
       }
     })
   );
+}
+
+/**
+ * Brings each required assessment's status (PIA, DIA, UpGuard) in line with
+ * where its owner team's review is — called after anything that moves stages.
+ * This is what makes the business owner's "please complete a PIA" notice and
+ * "Assessments To Be Completed" list clear once the review is done.
+ */
+async function syncAssessmentStatuses(caseId: string): Promise<void> {
+  const [stages, assessments] = await Promise.all([
+    prisma.caseStage.findMany({ where: { caseId } }),
+    prisma.caseAssessment.findMany({ where: { caseId } }),
+  ]);
+  const changes = assessmentStatusChanges(stages as any, assessments as any);
+  for (const ch of changes) {
+    await prisma.caseAssessment.update({ where: { caseId_key: { caseId, key: ch.key } }, data: { status: ch.status } });
+  }
 }
 
 /** Always reads the DB to find the next safe case number — no in-memory counter that resets on restart. */
@@ -169,6 +187,7 @@ casesRouter.post("/:id/stages/:stageKey/start", async (req, res) => {
   if (stage.status !== "active") return res.status(409).json({ error: `Stage is "${stage.status}", not active` });
 
   await prisma.caseStage.update({ where: { id: stage.id }, data: { status: "inProgress" } });
+  await syncAssessmentStatuses(req.params.id);
   const updated = await prisma.case.update({
     where: { id: req.params.id },
     data: { overallStatus: "inProgress" },
@@ -213,6 +232,8 @@ casesRouter.post("/:id/stages/:stageKey/complete", async (req, res) => {
     )
   );
 
+  await syncAssessmentStatuses(req.params.id);
+
   const overallStatus = isCaseFullyComplete(stageObjs as any) ? "completed" : "inProgress";
   const updated = await prisma.case.update({
     where: { id: req.params.id },
@@ -253,9 +274,11 @@ casesRouter.post("/:id/stages/:stageKey/complete", async (req, res) => {
  *     that the hierarchy was customized.
  */
 casesRouter.put("/:id/hierarchy", async (req, res) => {
-  const { actingAdminEmail, stages: edit } = req.body as {
+  const { actingAdminEmail, stages: edit, expectedUpdatedAt } = req.body as {
     actingAdminEmail?: string;
     stages?: HierarchyEditStage[];
+    /** The case's updatedAt as the editor saw it. If it's changed since, the edit is rejected so it can't be applied to a hierarchy the admin hasn't seen. */
+    expectedUpdatedAt?: string;
   };
   if (!actingAdminEmail) return res.status(400).json({ error: "actingAdminEmail is required" });
   if (!Array.isArray(edit)) return res.status(400).json({ error: "stages must be an array" });
@@ -270,6 +293,12 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
   if (!existing) return res.status(404).json({ error: "Case not found" });
   if (existing.overallStatus === "completed") {
     return res.status(409).json({ error: "This case is already complete — its hierarchy can't be changed." });
+  }
+  if (expectedUpdatedAt && new Date(expectedUpdatedAt).getTime() !== new Date(existing.updatedAt).getTime()) {
+    return res.status(409).json({
+      error: "This case changed while you were editing (a team may have started or finished a review). Load the latest version, then make your change again.",
+      code: "STALE_CASE",
+    });
   }
 
   const currentStages: CaseStage[] = existing.stages.map((s: (typeof existing.stages)[number]) => ({
@@ -293,12 +322,9 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
 
   // Re-run the cascade on the new shape. For a case still in the admin
   // inbox nothing changes (seq 0 is still active); for a case further along,
-  // a team dropped into the current step becomes active right away.
-  const statusesBefore = new Map(currentStages.map((s) => [s.stageKey, s.status]));
-  activateReadySeqOrders(result.stages);
-  const newlyActivatedTeams = result.stages
-    .filter((s) => statusesBefore.get(s.stageKey) !== "active" && s.status === "active")
-    .map((s) => s.team);
+  // a team dropped into the current step becomes active right away, and if
+  // the edit cleared the current step the case moves on to the next one.
+  const newlyActivatedTeams = cascadeAfterEdit(currentStages, result.stages);
 
   const addedTeams = result.addedStageKeys
     .map((k) => result.stages.find((s) => s.stageKey === k)?.team)
@@ -387,7 +413,10 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
         hierarchyEditedBy: admin?.name ?? actingAdminEmail,
       },
     });
-  });
+    // Azure Postgres round-trips add up across ~15 upserts; the 5s default is too tight.
+  }, { timeout: 20000, maxWait: 10000 });
+
+  await syncAssessmentStatuses(existing.id);
 
   const updated = await prisma.case.findUnique({
     where: { id: existing.id },

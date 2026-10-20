@@ -49,10 +49,27 @@ hierarchy.
 - **Who is a case admin:** `User.role = "admin"`. Seeded for Amber Hashwani
   only (`CASE_ADMINS` in `prisma/seed.ts`). This is separate from
   `TeamMember.isAdmin`, which only controls adding people to teams.
-- **What can be edited:** only stages that haven't started. Anything active,
-  in progress or completed is locked. Always-required stages can be moved
-  but not removed. Any assessor team can be added, including a second pass
-  by the same team.
+- **What can be edited:** anything where work hasn't started. In-progress
+  and completed stages, and the Admin Review stage itself, are locked. A
+  team that has been handed the case but hasn't clicked Start yet can still
+  be moved to a later step (the case leaves their inbox) or removed.
+  Always-required stages can be moved but not removed. Any assessor team can
+  be added, including a second pass by the same team.
+- **Adding a team after release:** drop it into the step marked IN REVIEW
+  and it lands in that team's inbox (and they're emailed) as soon as you
+  save. Drop it on a later step and it arrives when the case gets there.
+  Nothing can be dropped into the Admin Review step, so nothing bypasses
+  the inbox. Removing the last unfinished team in the current step moves
+  the case on to the next step immediately.
+- **Concurrent changes:** the editor sends the case's `updatedAt` it was
+  built from (`expectedUpdatedAt`). If a team started or finished a review
+  in the meantime, the save is refused with `409 STALE_CASE` and the editor
+  offers "Load latest", so an edit is never applied to a hierarchy the
+  admin hasn't seen.
+- **Assessment status** (PIA / DIA / UpGuard) now tracks the owner team's
+  stages on every start, complete and hierarchy edit: in progress while the
+  owner team has the case, completed when every owner stage is done, and
+  reopened if a further pass by that team is added.
 - **Assessments follow their teams:** adding Privacy makes the PIA required.
   Adding Data or AI makes the Data & AI Impact Assessment (DIA) required.
   Removing the last owning team un-requires it. When Graph is configured,
@@ -97,6 +114,24 @@ run locally or in a Codespace today. You only need a real Azure App Service
    these endpoints via `fetch` instead of reading/writing `localStorage` —
    everything else in the UI (`TeamDashboard`, `CaseDetails`, etc.) doesn't
    need to change since it already just receives `Case` objects as props.
+
+## Team dashboard tabs
+
+Each review team's dashboard sorts every case into exactly one tab, worked
+out fresh from the live hierarchy (`casesForTeam` in `src/lib/viewAdapters.ts`):
+
+| Tab | When |
+|---|---|
+| New Cases | it's this team's turn and they haven't started |
+| In Progress | this team has started |
+| Upcoming | this team is later in the hierarchy |
+| Completed | this team's part is done |
+| Other Open Cases | open case this team isn't part of, view only |
+
+Cases still in the Admin Inbox aren't shown to any team. Because the tab is
+recomputed rather than stored, a case an admin adds a team to moves out of
+that team's "Other Open Cases" on its own. The app refreshes cases every
+60 seconds and whenever the window regains focus.
 
 ## SharePoint integration (real, with mock fallback)
 

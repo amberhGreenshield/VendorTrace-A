@@ -3,11 +3,20 @@ import Header from "../components/Header";
 import ConfirmCompleteModal from "../components/ConfirmCompleteModal";
 import { TeamViewCase, LegacyStage } from "../lib/viewAdapters";
 
-const TABS: { key: LegacyStage; label: string }[] = [
+const TABS: { key: LegacyStage; label: string; hint?: string }[] = [
   { key: "new", label: "New Cases" },
   { key: "inProgress", label: "In Progress" },
+  { key: "upcoming", label: "Upcoming", hint: "Your team is in these cases' review hierarchy, but they haven't reached you yet." },
   { key: "completed", label: "Completed" },
+  { key: "other", label: "Other Open Cases", hint: "Open cases your team isn't part of — shown for visibility only. If an admin adds your team to one, it moves to New Cases or Upcoming automatically." },
 ];
+const EMPTY_TEXT: Record<LegacyStage, string> = {
+  new: "No cases waiting for your team.",
+  inProgress: "Nothing in progress.",
+  upcoming: "No cases heading your way yet.",
+  completed: "No completed cases yet.",
+  other: "No other open cases right now.",
+};
 const TIER_COLORS: Record<string, { bg: string; color: string }> = {
   "Tier 1": { bg: "#fee2e2", color: "#991b1b" },
   "Tier 2": { bg: "#fef3c7", color: "#92400e" },
@@ -29,11 +38,9 @@ export default function TeamDashboard({ teamName = "Your Team", onBack, onOpenCa
   const [confirmTarget, setConfirmTarget] = useState<TeamViewCase | null>(null);
 
   const filteredCases = cases.filter((c) => c.stage === activeTab);
-  const counts: Record<LegacyStage, number> = {
-    new: cases.filter((c) => c.stage === "new").length,
-    inProgress: cases.filter((c) => c.stage === "inProgress").length,
-    completed: cases.filter((c) => c.stage === "completed").length,
-  };
+  const counts = Object.fromEntries(TABS.map((t) => [t.key, cases.filter((c) => c.stage === t.key).length])) as Record<LegacyStage, number>;
+  const viewOnlyTab = activeTab === "upcoming" || activeTab === "other";
+  const activeHint = TABS.find((t) => t.key === activeTab)?.hint;
 
   function handleStart(c: TeamViewCase) {
     onStart(c.id, c.stageKey);
@@ -53,14 +60,14 @@ export default function TeamDashboard({ teamName = "Your Team", onBack, onOpenCa
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
       <Header title="Team Dashboard" subtitle={"Team: " + teamName} onBack={onBack} />
       <div style={{ display: "flex", gap: 16, padding: "20px 32px 0" }}>
-        {(["new", "inProgress", "completed"] as LegacyStage[]).map((s) => (
+        {(["new", "inProgress", "upcoming", "completed"] as LegacyStage[]).map((s) => (
           <div key={s} style={{ background: "#fff", borderRadius: 10, padding: "10px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 90 }}>
             <span style={{ fontSize: 24, fontWeight: 700, color: "#334155" }}>{counts[s]}</span>
-            <span style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{s === "new" ? "New" : s === "inProgress" ? "In Progress" : "Completed"}</span>
+            <span style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{s === "new" ? "New" : s === "inProgress" ? "In Progress" : s === "upcoming" ? "Upcoming" : "Completed"}</span>
           </div>
         ))}
       </div>
-      <div style={{ display: "flex", gap: 8, padding: "20px 32px 0" }}>
+      <div style={{ display: "flex", gap: 8, padding: "20px 32px 0", flexWrap: "wrap" }}>
         {TABS.map((tab) => {
           const active = activeTab === tab.key;
           return (
@@ -71,9 +78,12 @@ export default function TeamDashboard({ teamName = "Your Team", onBack, onOpenCa
           );
         })}
       </div>
-      <div style={{ margin: "20px 32px", background: "#fff", borderRadius: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.07)", overflow: "hidden" }}>
+      {activeHint && (
+        <div style={{ margin: "14px 32px 0", fontSize: 12.5, color: "#64748b" }}>{activeTab === "other" ? "👁️ " : "⏳ "}{activeHint}</div>
+      )}
+      <div style={{ margin: activeHint ? "12px 32px 20px" : "20px 32px", background: "#fff", borderRadius: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.07)", overflow: "hidden" }}>
         {filteredCases.length === 0 ? (
-          <div style={{ padding: "48px 32px", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>No cases in this stage.</div>
+          <div style={{ padding: "48px 32px", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>{EMPTY_TEXT[activeTab]}</div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -82,7 +92,7 @@ export default function TeamDashboard({ teamName = "Your Team", onBack, onOpenCa
                 <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#64748b" }}>Vendor</th>
                 <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#64748b" }}>Business Owner</th>
                 <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#64748b" }}>Risk Tier</th>
-                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#64748b" }}>Next Review</th>
+                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#64748b" }}>{viewOnlyTab ? "Currently With" : "Next Review"}</th>
                 <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#64748b" }}>Onboarding Duration</th>
                 <th style={{ padding: "12px 16px" }}></th>
               </tr>
@@ -99,10 +109,13 @@ export default function TeamDashboard({ teamName = "Your Team", onBack, onOpenCa
                     <td style={{ padding: "14px 16px" }}>
                       {c.riskTier && <span style={{ background: tierColor.bg, color: tierColor.color, borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.riskTier}</span>}
                     </td>
-                    <td style={{ padding: "14px 16px", color: "#64748b" }}>{c.nextReview ?? "—"}</td>
+                    <td style={{ padding: "14px 16px", color: "#64748b" }}>{viewOnlyTab ? c.currentlyWith : c.nextReview ?? "—"}</td>
                     <td style={{ padding: "14px 16px", color: "#64748b" }}>{c.onboardingDuration ?? "—"}</td>
                     <td style={{ padding: "14px 16px", display: "flex", gap: 8 }}>
                       <button onClick={() => onOpenCase?.(c)} style={{ padding: "6px 14px", border: "1.5px solid #0f4c3a", borderRadius: 6, background: "#fff", color: "#0f4c3a", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>View</button>
+                      {c.stage === "other" && (
+                        <span style={{ alignSelf: "center", fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>View only</span>
+                      )}
                       {c.stage === "new" && (
                         <button onClick={() => handleStart(c)} style={{ padding: "6px 14px", border: "none", borderRadius: 6, background: "#0f4c3a", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>Start</button>
                       )}

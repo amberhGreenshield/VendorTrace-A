@@ -25,7 +25,12 @@ export async function completeCaseStage(caseId: string, stageKey: string, comple
   return api.mapApiCaseToCase(updated);
 }
 
-export async function saveCaseHierarchy(caseId: string, actingAdminEmail: string, stages: api.HierarchyEditStage[]): Promise<Case> {
-  const updated = await api.saveHierarchy(caseId, actingAdminEmail, stages);
+export async function saveCaseHierarchy(
+  caseId: string,
+  actingAdminEmail: string,
+  stages: api.HierarchyEditStage[],
+  expectedUpdatedAt?: string
+): Promise<Case> {
+  const updated = await api.saveHierarchy(caseId, actingAdminEmail, stages, expectedUpdatedAt);
   return api.mapApiCaseToCase(updated);
 }

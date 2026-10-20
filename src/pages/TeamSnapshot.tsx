@@ -15,11 +15,16 @@ interface TeamSnapshotProps {
 }
 
 export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDashboard, onLogout, isAdmin, onOpenAdminPanel, onOpenAdminInbox, adminInboxCount }: TeamSnapshotProps) {
-  const openCases = cases.filter((c) => c.stage !== "completed").length;
-  const newCases = cases.filter((c) => c.stage === "new").length;
-  const closed = cases.filter((c) => c.stage === "completed").length;
-  const recentlyCompleted = cases.filter((c) => c.stage === "completed").slice(0, 3);
-  const overviewCases = cases.slice(0, 4);
+  // "Other" cases (not this team's) are visibility-only — they don't count
+  // toward the team's workload or show in its overview.
+  const ours = cases.filter((c) => c.stage !== "other");
+  const openCases = ours.filter((c) => c.stage === "new" || c.stage === "inProgress").length;
+  const newCases = ours.filter((c) => c.stage === "new").length;
+  const upcoming = ours.filter((c) => c.stage === "upcoming").length;
+  const closed = ours.filter((c) => c.stage === "completed").length;
+  const otherOpen = cases.length - ours.length;
+  const recentlyCompleted = ours.filter((c) => c.stage === "completed").slice(0, 3);
+  const overviewCases = ours.slice(0, 4);
 
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
@@ -58,7 +63,9 @@ export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDash
           <div style={{ background: "#e8ecee", borderRadius: "0 0 8px 8px", padding: "16px", fontSize: 13, color: "#334155", lineHeight: 1.8 }}>
             <div>Open Cases: <strong>{openCases}</strong></div>
             <div>New Cases: <strong>{newCases}</strong></div>
+            <div>Upcoming: <strong>{upcoming}</strong></div>
             <div>Closed: <strong>{closed}</strong></div>
+            <div style={{ color: "#64748b" }}>Other open cases (view only): <strong>{otherOpen}</strong></div>
           </div>
         </div>
         <div style={{ flex: 1 }}>
@@ -95,7 +102,7 @@ export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDash
             <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13, color: "#334155", padding: "8px 0", borderBottom: "1px solid #d7dde0" }}>
               <span style={{ fontWeight: 700, color: "#0f4c3a", minWidth: 60 }}>{c.caseNumber}</span>
               <span style={{ flex: 1, fontWeight: 500 }}>{c.vendorName}</span>
-              <span style={{ color: "#64748b" }}>{c.stage === "completed" ? "Complete" : c.teamName ?? "In Review"}</span>
+              <span style={{ color: "#64748b" }}>{c.stage === "completed" ? "Complete" : c.stage === "upcoming" ? `Upcoming · with ${c.currentlyWith}` : c.currentlyWith}</span>
             </div>
           ))}
         </div>

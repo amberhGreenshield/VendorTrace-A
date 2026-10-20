@@ -3,7 +3,7 @@ import { useMsal } from "@azure/msal-react";
 import { getAuthUser, setAuthUser as storeUser, clearAuthUser, UserProfile } from "@/lib/auth";
 import { Case } from "@/lib/schema";
 import { fetchAllCases, startCaseStage, completeCaseStage, saveCaseHierarchy } from "@/lib/caseStore";
-import { HierarchyEditStage, fetchMe } from "@/lib/apiClient";
+import { ApiError, HierarchyEditStage, fetchMe } from "@/lib/apiClient";
 import { ADMIN_STAGE_KEY } from "@/lib/hierarchy";
 import { casesForTeam, teamKeyFromLabel, TeamViewCase } from "@/lib/viewAdapters";
 
@@ -69,6 +69,31 @@ export default function App() {
     return () => { cancelled = true; };
   }, [authPage, authUser]);
 
+  // Background refresh — no loading screen, errors ignored (the next tick
+  // retries). This is what moves a case between a team's tabs when an admin
+  // reassigns it or another team finishes a step, without anyone reloading.
+  const refreshCasesSilently = useCallback(async () => {
+    try {
+      const fresh = await fetchAllCases();
+      setCases(fresh);
+    } catch {
+      /* keep what we have */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authPage !== "app") return;
+    const interval = window.setInterval(refreshCasesSilently, 60_000);
+    const onFocus = () => { if (document.visibilityState === "visible") refreshCasesSilently(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [authPage, refreshCasesSilently]);
+
   useEffect(() => {
     if (authPage !== "app") return;
     return reloadCases();
@@ -130,9 +155,18 @@ export default function App() {
 
   // ── Case-admin actions ───────────────────────────────────────────────────
   // Errors are re-thrown so AdminCaseView can show them inline.
-  async function handleSaveHierarchy(caseId: string, stages: HierarchyEditStage[]) {
-    const updated = await saveCaseHierarchy(caseId, authUser?.email ?? "", stages);
-    setCases((prev) => prev.map((c) => (c.id === caseId ? updated : c)));
+  async function handleSaveHierarchy(caseId: string, stages: HierarchyEditStage[], basedOnUpdatedAt?: string) {
+    try {
+      // basedOnUpdatedAt = the version the editor was showing, NOT whatever the
+      // last background refresh fetched — otherwise a stale edit could slip through.
+      const updated = await saveCaseHierarchy(caseId, authUser?.email ?? "", stages, basedOnUpdatedAt);
+      setCases((prev) => prev.map((c) => (c.id === caseId ? updated : c)));
+    } catch (err) {
+      // Someone moved the case on while the editor was open — pull the latest
+      // so the admin sees (and edits) what's really there now.
+      if (err instanceof ApiError && err.code === "STALE_CASE") await refreshCasesSilently();
+      throw err;
+    }
   }
 
   async function handleReleaseFromAdmin(caseId: string) {

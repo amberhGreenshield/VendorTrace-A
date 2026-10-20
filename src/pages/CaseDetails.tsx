@@ -22,6 +22,21 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
       <Header onBack={onBack} title={"Case: " + c.caseNumber} subtitle={"Vendor: " + c.vendorName} />
       <CaseHierarchyBanner case_={c.raw} />
+      {(c.stage === "other" || c.stage === "upcoming") && (
+        <div
+          style={{
+            margin: "10px 32px 0", background: c.stage === "other" ? "#f8fafc" : "#fffbeb",
+            border: `1px solid ${c.stage === "other" ? "#e2e8f0" : "#fde68a"}`, borderRadius: 8, padding: "6px 12px",
+            fontSize: 12, color: c.stage === "other" ? "#475569" : "#92400e",
+          }}
+        >
+          {c.stage === "other" ? (
+            <>👁️ <strong>View only.</strong> Your team isn't part of this case's review — it's shown for visibility. It's currently with {c.currentlyWith}.</>
+          ) : (
+            <>⏳ <strong>Coming to {teamName}.</strong> Your team is later in this case's hierarchy; it's currently with {c.currentlyWith}. You can start once it reaches you.</>
+          )}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 24, padding: "20px 32px 0", flexWrap: "wrap" }}>
         {[
           { label: "Business Owner", value: c.businessOwner },
@@ -29,6 +44,7 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
           { label: "Supplier", value: c.supplier },
           { label: "Risk Tier", value: c.riskTier },
           { label: "Onboarding Duration", value: c.onboardingDuration },
+          { label: "Currently With", value: c.currentlyWith },
           { label: "Next Review", value: c.nextReview },
         ].map(({ label, value }) =>
           value ? (
