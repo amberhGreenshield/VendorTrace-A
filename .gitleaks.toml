@@ -1,0 +1,44 @@
+# Secret-scanning rules for this repo, used by .github/workflows/secret-scan.yml
+# (and runnable locally: `gitleaks git` or `gitleaks dir .`).
+#
+# The default gitleaks rules MISSED the Azure Postgres connection string and
+# the Graph client secret that were committed in api/.env in Aug 2026, so the
+# custom rules below catch exactly those shapes, plus any committed .env file.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "env-file-committed"
+description = "A .env file (other than .env.example) was committed"
+path = '''(^|/)\.env(\.[^/]+)?$'''
+
+[[rules]]
+id = "postgres-url-with-password"
+description = "Database connection string containing a password"
+regex = '''postgres(?:ql)?://[^:\s/]+:([^@\s]{3,})@[^\s'"]+'''
+secretGroup = 1
+
+[[rules]]
+id = "graph-or-entra-client-secret"
+description = "Entra ID / Microsoft Graph client secret assignment"
+regex = '''(?i)(?:client[_-]?secret|GRAPH_CLIENT_SECRET|AZURE_CLIENT_SECRET)\s*[:=]\s*['"]?([A-Za-z0-9~._\-/+=]{20,})'''
+secretGroup = 1
+
+[[rules]]
+id = "azure-publish-profile"
+description = "Azure App Service publish profile"
+regex = '''userPWD="[^"]{10,}"'''
+
+[allowlist]
+description = "Known false positives"
+# - rule keys in the rules engine look like API keys to the generic detector
+# - code that READS a secret from the environment is the correct pattern
+# - test fixtures explicitly labelled as synthetic
+regexes = [
+  '''^secgov\.[a-z0-9.]+$''',
+  '''process\.env\.''',
+  '''^env\.''',
+  '''synthetic-test-value''',
+]
+paths = ['''package-lock\.json''', '''(^|/)\.env\.example$''']
