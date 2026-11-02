@@ -7,6 +7,17 @@ import { runAssessmentReminders, startReminderScheduler } from "./jobs/assessmen
 import { migrateOnStart } from "./jobs/migrateOnStart.js";
 
 const app = express();
+// Don't advertise the framework, and send baseline security headers on every
+// response. (CORS and authentication are tightened in the SSO lockdown work.)
+app.disable("x-powered-by");
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 app.use(cors());
 app.use(express.json());
 

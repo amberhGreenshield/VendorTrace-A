@@ -12,33 +12,17 @@ interface Props {
 
 type Phase = "checkingSso" | "needsInteractiveSignIn" | "signingIn" | "chooseRole" | "demo";
 
-// ─── DEMO SIGN-IN (no SSO required) ─────────────────────────────────────────
-// Real SSO needs an Entra ID app registration (see msalConfig.ts) — until
-// that's wired up, this lets anyone jump straight into the app as a
-// Business Owner or as a specific review team, so cases can be created and
-// walked through the whole hierarchy for demos/testing.
+// ─── DEMO SIGN-IN (local development only) ─────────────────────────────────
+// Lets a developer jump in as a Business Owner or a review team without a
+// Microsoft account. It is OFF in every deployed build: it only appears when
+// running `npm run dev` locally, or if VITE_ENABLE_DEMO_LOGIN is explicitly
+// "true" at build time (never set that for production — the production
+// workflow sets it to "false").
 //
-// This is intentionally NOT gated behind an env flag right now so it's easy
-// to demo from any deployed environment. Once real SSO is live, either
-// delete this block or gate it behind something like
-// `import.meta.env.VITE_ENABLE_DEMO_LOGIN`.
+// There is deliberately no demo admin: admin rights must only ever come from
+// a real Microsoft sign-in that the database recognises as an admin.
+const DEMO_LOGIN_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_LOGIN === "true";
 const DEMO_TEAM_KEYS = (Object.keys(TEAM_LABELS) as TeamKey[]).filter((k) => k !== "Admin");
-
-// Demo case admin. Uses Amber's real email so the API's admin check
-// (User.role = "admin", seeded by api/prisma/seed.ts) passes — this only
-// works against a database where that seed has run. Same no-token caveat as
-// every other demo login here.
-function demoAdminProfile(): UserProfile {
-  return {
-    accountId: "demo-case-admin",
-    name: "Amber Hashwani",
-    email: "amber.hashwani@greenshield.ca",
-    role: "team",
-    team: { id: -1, name: "PVM", memberCount: 1 },
-    isAdmin: true,
-    isCaseAdmin: true,
-  };
-}
 
 function demoTeamProfile(teamKey: TeamKey): UserProfile {
   return {
@@ -227,6 +211,7 @@ export default function Login({ onSuccess }: Props) {
                 >
                   {phase === "signingIn" ? "Redirecting…" : "Sign in with Microsoft"}
                 </button>
+                {DEMO_LOGIN_ENABLED && (
                 <button
                   type="button"
                   onClick={() => setPhase("demo")}
@@ -234,11 +219,12 @@ export default function Login({ onSuccess }: Props) {
                 >
                   SSO not set up yet? Continue with a demo account →
                 </button>
+                )}
               </div>
             </div>
           )}
 
-          {phase === "demo" && (
+          {DEMO_LOGIN_ENABLED && phase === "demo" && (
             <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", overflow: "hidden" }}>
               <div style={{ background: "#5f9ea0", color: "#fff", padding: "10px 20px", fontSize: 13, fontWeight: 600 }}>
                 🧪 Demo sign-in (no SSO)
@@ -260,20 +246,6 @@ export default function Login({ onSuccess }: Props) {
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>Continue as Demo Business Owner</div>
                     <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Submit a new case and track it on your dashboard.</div>
-                  </button>
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 8 }}>
-                    Case Admin
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handleDemoLogin(demoAdminProfile())}
-                    style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 8, cursor: "pointer", border: "1.5px solid #cbd5e1", background: "#fff" }}
-                  >
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>Continue as Amber Hashwani (Admin)</div>
-                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>PVM team view plus the Admin Inbox and hierarchy editor.</div>
                   </button>
                 </div>
 

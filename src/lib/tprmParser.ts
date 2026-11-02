@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import readXlsxFile from "read-excel-file/browser";
 import { CaseFacts } from "./schema";
 
 // ─── TPRM workbook parser ───────────────────────────────────────────────────
@@ -13,14 +13,35 @@ import { CaseFacts } from "./schema";
 //   "01 Criticality Assessment" → criticality rating
 //   "02 TP Risk Assessment"     → risk tier + Q2–Q5 answers
 
+//
+// Uses `read-excel-file` (read-only, maintained) instead of the npm `xlsx`
+// package, whose npm releases carry unfixed security advisories. Mirrors the
+// server's parser in api/src/domain/tprmParser.ts, which is authoritative.
+
 export class TprmParseError extends Error {}
 
-type SheetGrid = (string | number | undefined)[][];
+type Cell = string | number | boolean | Date | null | undefined;
+type SheetGrid = Cell[][];
+type Workbook = Map<string, SheetGrid>;
 
-function sheetToGrid(workbook: XLSX.WorkBook, sheetName: string): SheetGrid {
-  const sheet = workbook.Sheets[sheetName];
+async function readWorkbook(file: File): Promise<Workbook> {
+  try {
+    const sheets = (await readXlsxFile(file)) as unknown as { sheet: string; data: SheetGrid }[];
+    return new Map(sheets.map((s) => [s.sheet, s.data]));
+  } catch {
+    throw new TprmParseError("This file couldn't be read as an Excel workbook (.xlsx). Please upload the standard TPRM workbook.");
+  }
+}
+
+function sheetToGrid(workbook: Workbook, sheetName: string): SheetGrid {
+  const sheet = workbook.get(sheetName);
   if (!sheet) throw new TprmParseError(`Sheet "${sheetName}" not found in workbook.`);
-  return XLSX.utils.sheet_to_json<(string | number | undefined)[]>(sheet, { header: 1, defval: undefined });
+  return sheet;
+}
+
+/** Empty cells come back as null; treat null/undefined/whitespace alike. */
+function isBlank(value: unknown): boolean {
+  return value === undefined || value === null || String(value).trim() === "";
 }
 
 function normalize(value: unknown): string {
@@ -31,11 +52,11 @@ function normalize(value: unknown): string {
 function findValueByLabel(grid: SheetGrid, labelSubstring: string): string | undefined {
   const needle = normalize(labelSubstring);
   for (const row of grid) {
-    const matchIndex = row.findIndex((cell) => cell !== undefined && normalize(cell).includes(needle));
+    const matchIndex = row.findIndex((cell) => !isBlank(cell) && normalize(cell).includes(needle));
     if (matchIndex === -1) continue;
     for (let i = matchIndex + 1; i < row.length; i++) {
       const candidate = row[i];
-      if (candidate !== undefined && String(candidate).trim() !== "") {
+      if (!isBlank(candidate)) {
         return String(candidate).trim();
       }
     }
@@ -48,9 +69,9 @@ function findResponseByCategory(grid: SheetGrid, categorySubstring: string): str
   const needle = normalize(categorySubstring);
   for (const row of grid) {
     const categoryCell = row[1];
-    if (categoryCell !== undefined && normalize(categoryCell).includes(needle)) {
+    if (!isBlank(categoryCell) && normalize(categoryCell).includes(needle)) {
       const response = row[3];
-      return response !== undefined && String(response).trim() !== "" ? String(response).trim() : undefined;
+      return isBlank(response) ? undefined : String(response).trim();
     }
   }
   return undefined;
@@ -69,9 +90,7 @@ function normalizeRiskTier(raw: string | undefined): CaseFacts["riskTier"] | und
 }
 
 export async function parseTprmWorkbook(file: File): Promise<CaseFacts> {
-  const buffer = await file.arrayBuffer();
-  // Use Uint8Array — more compatible across bundlers than passing ArrayBuffer directly
-  const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+  const workbook = await readWorkbook(file);
 
   const startHere = sheetToGrid(workbook, "00 Start Here");
   const legalName = findValueByLabel(startHere, "Legal name of third-party");

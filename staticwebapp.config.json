@@ -1,7 +1,10 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/*.{css,js,png,jpg,svg,ico,woff,woff2,ttf}"]
+    "exclude": [
+      "/assets/*",
+      "/*.{css,js,png,jpg,svg,ico,woff,woff2,ttf}"
+    ]
   },
   "mimeTypes": {
     ".js": "application/javascript",
@@ -10,6 +13,12 @@
     ".svg": "image/svg+xml"
   },
   "globalHeaders": {
-    "Cache-Control": "no-cache"
+    "Cache-Control": "no-cache",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Content-Security-Policy-Report-Only": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://gsh-vtr-pd-cac-app-01.azurewebsites.net https://login.microsoftonline.com; frame-src https://login.microsoftonline.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
   }
 }

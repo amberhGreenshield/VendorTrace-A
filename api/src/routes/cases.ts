@@ -114,7 +114,7 @@ casesRouter.post("/", upload.single("tprmFile"), async (req, res) => {
   if (!businessOwner) return res.status(400).json({ error: "businessOwner is required" });
 
   try {
-    const facts = parseTprmWorkbookBuffer(file.buffer);
+    const facts = await parseTprmWorkbookBuffer(file.buffer);
     const evaluation = evaluateRules(facts);
     const stages = buildCaseStages(evaluation);
     const folder = await createCaseFolder(
