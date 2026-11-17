@@ -83,7 +83,7 @@ export default function AdminInbox({ cases, onBack, onOpenCase }: Props) {
             {tab === "inbox" ? "Nothing waiting for you — new cases will appear here." : "No cases here."}
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                 {["Case ID", "Vendor", "Business Owner", "Risk Tier", "Currently With", "Hierarchy", "Age", ""].map((h) => (
@@ -123,7 +123,7 @@ export default function AdminInbox({ cases, onBack, onOpenCase }: Props) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

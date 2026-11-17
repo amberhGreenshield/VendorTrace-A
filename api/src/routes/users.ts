@@ -88,19 +88,34 @@ usersRouter.post("/team-members", async (req, res) => {
   if (!team) return res.status(404).json({ error: `Team "${teamName}" not found` });
 
   const normalizedEmail = email.trim().toLowerCase();
+  if (!/^[^\s@]+@greenshield\.ca$/.test(normalizedEmail)) {
+    return res.status(400).json({ error: "Enter a GreenShield work email (name@greenshield.ca)." });
+  }
   const user = await prisma.user.upsert({
     where: { email: normalizedEmail },
-    update: { name },
-    create: { name, email: normalizedEmail, role: "team_member" },
+    update: { name: name.trim() },
+    create: { name: name.trim(), email: normalizedEmail, role: "team_member" },
   });
 
+  const existing = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId: team.id } },
+  });
+  // Re-adding someone can promote them to admin, but never silently removes
+  // admin rights they already have (unticked box ≠ "demote").
   const membership = await prisma.teamMember.upsert({
     where: { userId_teamId: { userId: user.id, teamId: team.id } },
-    update: { isAdmin: Boolean(isAdmin) },
+    update: isAdmin ? { isAdmin: true } : {},
     create: { userId: user.id, teamId: team.id, isAdmin: Boolean(isAdmin) },
   });
 
-  res.status(201).json({ userId: user.id, name: user.name, email: user.email, teamName: team.name, isAdmin: membership.isAdmin });
+  res.status(existing ? 200 : 201).json({
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    teamName: team.name,
+    isAdmin: membership.isAdmin,
+    alreadyMember: Boolean(existing),
+  });
 });
 
 //Add the persistence endpoint

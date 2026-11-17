@@ -9,7 +9,7 @@ export default function Header({ title, subtitle, onBack, rightContent }: Header
   return (
     <div style={{
       background: "#0f4c3a", color: "#fff", padding: "0 32px",
-      height: 56, display: "flex", alignItems: "center", gap: 12,
+      minHeight: 56, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", paddingTop: 8, paddingBottom: 8, boxSizing: "border-box",
     }}>
       {onBack && (
         <button onClick={onBack} style={{
