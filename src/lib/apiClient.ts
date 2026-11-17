@@ -211,7 +211,8 @@ export function mapApiCaseToCase(a: ApiCase): Case {
     arrangementType: a.arrangementType,
     businessLines: a.businessLines,
     riskTier: (a.riskTier ?? undefined) as Case["riskTier"],
-    criticality: a.criticality ?? undefined,
+    // Older cases may have stored the blank template's hint text as the value.
+    criticality: a.criticality && !/^\(?\s*(e\.g\.|example)\b/i.test(a.criticality) ? a.criticality : undefined,
     createdAt: a.createdAt,
     facts: a.facts as Case["facts"],
     stages: a.stages.map((s) => ({

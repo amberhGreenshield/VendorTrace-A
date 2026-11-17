@@ -143,7 +143,7 @@ export default function AdminCaseView({ case_: c, onBack, onSaveHierarchy, onRel
               <div style={{ fontSize: 12.5, opacity: 0.85 }}>
                 {dirty
                   ? "You have unsaved hierarchy changes — save or undo them before releasing."
-                  : <>Moves the case out of your inbox and notifies step 1 ({nextReviewTeam(c)}).</>}
+                  : <>Moves the case out of your inbox and notifies the next step ({nextReviewTeam(c)}).</>}
               </div>
             </div>
             {confirmRelease ? (

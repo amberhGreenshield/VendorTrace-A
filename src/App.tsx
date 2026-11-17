@@ -104,6 +104,7 @@ export default function App() {
   const [adminCaseId, setAdminCaseId] = useState<string | null>(null);
   const [boPage, setBoPage] = useState<BoPage>("snapshot");
   const [boSelectedCaseId, setBoSelectedCaseId] = useState<string | null>(null);
+  const [boJustCreated, setBoJustCreated] = useState<string | null>(null);
 
   function handleLogout() {
     clearAuthUser();
@@ -111,7 +112,9 @@ export default function App() {
     setTeamPage("snapshot");
     setBoPage("snapshot");
     setAuthPage("login");
-    instance.logoutRedirect();
+    // Demo accounts never signed in to Microsoft, so there's no Microsoft
+    // session to end — just return to the sign-in page.
+    if (instance.getAllAccounts().length > 0) instance.logoutRedirect();
   }
 
   function handleLogin(user: UserProfile, isNew: boolean) {
@@ -183,6 +186,7 @@ export default function App() {
 
   function handleCaseCreated(newCase: Case) {
     setCases((prev) => [newCase, ...prev]);
+    setBoJustCreated(newCase.caseNumber);
     setBoPage("dashboard");
   }
 
@@ -238,9 +242,11 @@ export default function App() {
       return (
         <BusinessOwnerDashboard
           cases={boCases}
-          onBack={() => setBoPage("snapshot")}
-          onOpenCase={(c) => { setBoSelectedCaseId(c.id); setBoPage("caseDetails"); }}
-          onNewCase={() => setBoPage("newCase")}
+          justCreatedCaseNumber={boJustCreated}
+          onDismissCreated={() => setBoJustCreated(null)}
+          onBack={() => { setBoJustCreated(null); setBoPage("snapshot"); }}
+          onOpenCase={(c) => { setBoJustCreated(null); setBoSelectedCaseId(c.id); setBoPage("caseDetails"); }}
+          onNewCase={() => { setBoJustCreated(null); setBoPage("newCase"); }}
         />
       );
     }
@@ -314,6 +320,7 @@ export default function App() {
   return (
     <TeamSnapshot
       teamName={teamName}
+      userName={authUser?.name}
       cases={teamViewCases}
       onOpenDashboard={() => setTeamPage("dashboard")}
       onLogout={handleLogout}

@@ -44,6 +44,10 @@ function normalize(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function isTemplateHint(cell: unknown): boolean {
+  return /^\(?\s*(e\.g\.|example)\b/i.test(String(cell).trim());
+}
+
 function findValueByLabel(grid: SheetGrid, labelSubstring: string): string | undefined {
   const needle = normalize(labelSubstring);
   for (const row of grid) {
@@ -51,7 +55,9 @@ function findValueByLabel(grid: SheetGrid, labelSubstring: string): string | und
     if (matchIndex === -1) continue;
     for (let i = matchIndex + 1; i < row.length; i++) {
       const candidate = row[i];
-      if (!isBlank(candidate)) {
+      // The blank template has hint text such as "(example: High / Medium /
+      // Low)" next to some answer cells; that's not an answer.
+      if (!isBlank(candidate) && !isTemplateHint(candidate)) {
         return String(candidate).trim();
       }
     }

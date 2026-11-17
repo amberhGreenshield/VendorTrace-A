@@ -410,7 +410,9 @@ function StageChip({ stage, onRemove }: { stage: DraftStage; onRemove?: () => vo
       <span style={{ opacity: 0.5 }}>{stage.frozen ? "🔒" : "⠿"}</span>
       <span style={{ flex: 1 }}>
         {stage.label}
-        <div style={{ fontSize: 10, fontWeight: 500, opacity: 0.75 }}>{stage.stageKey ? st.text : "New — not saved"}</div>
+        <div style={{ fontSize: 10, fontWeight: 500, opacity: 0.75 }}>
+          {!stage.stageKey ? "New — not saved" : stage.stageKey === "admin-review" && stage.status === "active" ? "In your inbox" : st.text}
+        </div>
       </span>
       {TEAM_ASSESSMENT_BADGE[stage.team] && <Badge text={TEAM_ASSESSMENT_BADGE[stage.team]!} />}
       {onRemove && (

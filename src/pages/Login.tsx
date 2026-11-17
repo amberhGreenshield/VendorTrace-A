@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { getProfileForAccount, setAuthUser, UserProfile, UserRole } from "@/lib/auth";
@@ -12,17 +12,19 @@ interface Props {
 
 type Phase = "checkingSso" | "needsInteractiveSignIn" | "signingIn" | "chooseRole" | "demo";
 
-// ─── DEMO SIGN-IN (local development only) ─────────────────────────────────
-// Lets a developer jump in as a Business Owner or a review team without a
-// Microsoft account. It is OFF in every deployed build: it only appears when
-// running `npm run dev` locally, or if VITE_ENABLE_DEMO_LOGIN is explicitly
-// "true" at build time (never set that for production — the production
-// workflow sets it to "false").
+// ─── DEMO SIGN-IN (for demos while Microsoft sign-in awaits approval) ──────
+// Lets someone jump in as a Business Owner, a review team, or the case admin
+// without a Microsoft account. It only appears when running `npm run dev`
+// locally, or when VITE_ENABLE_DEMO_LOGIN is "true" at build time (the
+// GitHub variable of the same name controls the deployed site).
 //
-// There is deliberately no demo admin: admin rights must only ever come from
-// a real Microsoft sign-in that the database recognises as an admin.
+// The demo case admin signs in as the seeded admin account, so the API still
+// decides admin rights from the database. Turn the flag off again once real
+// Microsoft sign-in is live: until the API checks Entra tokens, anyone who
+// can reach the site could use these buttons.
 const DEMO_LOGIN_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_LOGIN === "true";
 const DEMO_TEAM_KEYS = (Object.keys(TEAM_LABELS) as TeamKey[]).filter((k) => k !== "Admin");
+const DEMO_CASE_ADMIN = { accountId: "demo-case-admin", name: "Amber Hashwani", email: "amber.hashwani@greenshield.ca" };
 
 function demoTeamProfile(teamKey: TeamKey): UserProfile {
   return {
@@ -47,6 +49,8 @@ function demoBusinessOwnerProfile(): UserProfile {
 export default function Login({ onSuccess }: Props) {
   const { instance, accounts } = useMsal();
   const [phase, setPhase] = useState<Phase>("checkingSso");
+  const phaseRef = useRef<Phase>(phase);
+  phaseRef.current = phase;
   const [pendingName, setPendingName] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
   const [pendingAccountId, setPendingAccountId] = useState("");
@@ -68,8 +72,11 @@ export default function Login({ onSuccess }: Props) {
       }
       try {
         const result = await instance.ssoSilent(loginRequest);
+        if (phaseRef.current === "demo") return;
         handleAccount(result.account.homeAccountId, result.account.name ?? result.account.username, result.account.username);
       } catch (err) {
+        // Someone who already chose a demo account stays on the demo picker.
+        if (phaseRef.current === "demo") return;
         if (err instanceof InteractionRequiredAuthError) {
           setPhase("needsInteractiveSignIn");
         } else {
@@ -191,6 +198,15 @@ export default function Login({ onSuccess }: Props) {
           {(phase === "checkingSso") && (
             <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", padding: "32px 24px", textAlign: "center", color: "#64748b", fontSize: 14 }}>
               Checking your Microsoft sign-in…
+              {DEMO_LOGIN_ENABLED && (
+                <button
+                  type="button"
+                  onClick={() => setPhase("demo")}
+                  style={{ display: "block", width: "100%", marginTop: 18, padding: "10px", borderRadius: 8, border: "1.5px dashed #cbd5e1", background: "#f8fafc", color: "#475569", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}
+                >
+                  Skip — continue with a demo account →
+                </button>
+              )}
             </div>
           )}
 
@@ -246,6 +262,20 @@ export default function Login({ onSuccess }: Props) {
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>Continue as Demo Business Owner</div>
                     <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Submit a new case and track it on your dashboard.</div>
+                  </button>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 8 }}>
+                    Case Admin
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleAccount(DEMO_CASE_ADMIN.accountId, DEMO_CASE_ADMIN.name, DEMO_CASE_ADMIN.email)}
+                    style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 8, cursor: "pointer", border: "1.5px solid #cbd5e1", background: "#fff" }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f4c3a" }}>Continue as {DEMO_CASE_ADMIN.name} (case admin)</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Admin inbox, review-path editor and the PVM team view.</div>
                   </button>
                 </div>
 

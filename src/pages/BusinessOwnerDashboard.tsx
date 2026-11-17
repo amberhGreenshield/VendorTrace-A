@@ -1,8 +1,9 @@
 import { useState } from "react";
 import Header from "../components/Header";
 import { Case } from "../lib/schema";
-import { currentStateLabel, assessmentsToCompleteList } from "../lib/boViewHelpers";
+import { currentStateLabel, assessmentsToCompleteList, boCaseBucket } from "../lib/boViewHelpers";
 import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
+import HelpButton from "../components/HelpButton";
 
 type TabKey = "new" | "inProgress" | "completed";
 const TABS: { key: TabKey; label: string }[] = [
@@ -21,20 +22,34 @@ interface BusinessOwnerDashboardProps {
   onOpenCase?: (c: Case) => void;
   onNewCase?: () => void;
   cases: Case[];
+  /** Case number just submitted — shows a confirmation banner. */
+  justCreatedCaseNumber?: string | null;
+  onDismissCreated?: () => void;
 }
 
-export default function BusinessOwnerDashboard({ onBack, onOpenCase, onNewCase, cases }: BusinessOwnerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>("new");
-  const filteredCases = cases.filter((c) => c.overallStatus === activeTab);
+export default function BusinessOwnerDashboard({ onBack, onOpenCase, onNewCase, cases, justCreatedCaseNumber, onDismissCreated }: BusinessOwnerDashboardProps) {
   const counts: Record<TabKey, number> = {
-    new: cases.filter((c) => c.overallStatus === "new").length,
-    inProgress: cases.filter((c) => c.overallStatus === "inProgress").length,
-    completed: cases.filter((c) => c.overallStatus === "completed").length,
+    new: cases.filter((c) => boCaseBucket(c) === "new").length,
+    inProgress: cases.filter((c) => boCaseBucket(c) === "inProgress").length,
+    completed: cases.filter((c) => boCaseBucket(c) === "completed").length,
   };
+  // Open on the first tab that has something in it.
+  const [activeTab, setActiveTab] = useState<TabKey>(() =>
+    justCreatedCaseNumber || counts.new > 0 ? "new" : counts.inProgress > 0 ? "inProgress" : counts.completed > 0 ? "completed" : "new"
+  );
+  const filteredCases = cases.filter((c) => boCaseBucket(c) === activeTab);
 
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
       <Header title="My Dashboard" subtitle="Business Owner" onBack={onBack} />
+      {justCreatedCaseNumber && (
+        <div style={{ margin: "20px 32px 0", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 10, padding: "12px 16px", fontSize: 13, color: "#065f46", display: "flex", alignItems: "center", gap: 12 }}>
+          <span>✅ Case <strong>{justCreatedCaseNumber}</strong> was created. The case admin will check it first, then it moves to the review teams.</span>
+          {onDismissCreated && (
+            <button onClick={onDismissCreated} aria-label="Dismiss" style={{ marginLeft: "auto", border: "none", background: "transparent", color: "#065f46", fontSize: 16, cursor: "pointer" }}>×</button>
+          )}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 16, padding: "20px 32px 0", alignItems: "center" }}>
         {(["new", "inProgress", "completed"] as TabKey[]).map((s) => (
           <div key={s} style={{ background: "#fff", borderRadius: 10, padding: "10px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 90 }}>
@@ -118,9 +133,7 @@ export default function BusinessOwnerDashboard({ onBack, onOpenCase, onNewCase, 
           )}
         </div>
       </div>
-      <div style={{ position: "fixed", bottom: 24, right: 24 }}>
-        <button style={{ width: 52, height: 52, borderRadius: "50%", border: "2.5px solid #0f4c3a", background: "#fff", color: "#0f4c3a", fontSize: 22, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>?</button>
-      </div>
+      <HelpButton audience="bo" />
     </div>
   );
 }

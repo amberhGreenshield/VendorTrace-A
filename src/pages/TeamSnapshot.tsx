@@ -1,8 +1,10 @@
 import Header from "../components/Header";
 import { TeamViewCase } from "../lib/viewAdapters";
+import HelpButton from "../components/HelpButton";
 
 interface TeamSnapshotProps {
   teamName?: string;
+  userName?: string;
   cases: TeamViewCase[];
   onOpenDashboard: () => void;
   onLogout?: () => void;
@@ -14,7 +16,7 @@ interface TeamSnapshotProps {
   adminInboxCount?: number;
 }
 
-export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDashboard, onLogout, isAdmin, onOpenAdminPanel, onOpenAdminInbox, adminInboxCount }: TeamSnapshotProps) {
+export default function TeamSnapshot({ teamName = "Your Team", userName, cases, onOpenDashboard, onLogout, isAdmin, onOpenAdminPanel, onOpenAdminInbox, adminInboxCount }: TeamSnapshotProps) {
   // "Other" cases (not this team's) are visibility-only — they don't count
   // toward the team's workload or show in its overview.
   const ours = cases.filter((c) => c.stage !== "other");
@@ -29,7 +31,8 @@ export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDash
   return (
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
       <Header
-        title={"Welcome Back, " + teamName + " 👋"}
+        title={"Welcome Back, " + (userName || teamName) + " 👋"}
+        subtitle={userName ? teamName + " team" : undefined}
         rightContent={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {isAdmin && (
@@ -107,9 +110,7 @@ export default function TeamSnapshot({ teamName = "Your Team", cases, onOpenDash
           ))}
         </div>
       </div>
-      <div style={{ position: "fixed", bottom: 24, right: 24 }}>
-        <button style={{ width: 52, height: 52, borderRadius: "50%", border: "2.5px solid #0f4c3a", background: "#fff", color: "#0f4c3a", fontSize: 22, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>?</button>
-      </div>
+      <HelpButton audience="team" />
     </div>
   );
 }

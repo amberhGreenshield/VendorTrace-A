@@ -1,5 +1,6 @@
 import { Case, CaseAssessment, CompletedForm, TEAM_LABELS } from "./schema";
 import { currentTeamForCase, isAssessmentComplete } from "./caseEngine";
+import { ADMIN_STAGE_KEY } from "./hierarchy";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -35,7 +36,13 @@ export function outstandingAssessments(c: Case): CaseAssessment[] {
 export function currentStateLabel(c: Case): string {
   if (c.overallStatus === "completed") return "Completed";
   const team = currentTeamForCase(c);
-  return team ? `With ${TEAM_LABELS[team]}` : "Submitted";
+  if (!team) return "Submitted";
+  // Teams in the same step review in parallel — name all of them that still have it.
+  const current = c.stages.find((s) => s.status === "active" || s.status === "inProgress")!;
+  const together = c.stages
+    .filter((s) => s.seqOrder === current.seqOrder && (s.status === "active" || s.status === "inProgress"))
+    .map((s) => TEAM_LABELS[s.team]);
+  return `With ${Array.from(new Set(together)).join(" + ")}`;
 }
 
 /** Only assessments that are actually required for this case and not yet done. */
@@ -60,4 +67,16 @@ export function requiresUpGuard(c: Case): boolean {
   if (!c.stages.some((s) => s.team === "SecurityGovernance" && s.status !== "skipped")) return false;
   const upguard = c.assessments.find((a) => a.key === "UpguardAssessment");
   return !upguard || !isAssessmentComplete(upguard);
+}
+
+/**
+ * Which Business Owner tab a case belongs in. "New" = submitted and still
+ * waiting for the case admin's check (no review team has it yet), so a case
+ * the BO has just created shows up there instead of disappearing.
+ */
+export function boCaseBucket(c: Case): "new" | "inProgress" | "completed" {
+  if (c.overallStatus === "completed") return "completed";
+  if (c.overallStatus === "new") return "new";
+  const admin = c.stages.find((s) => s.stageKey === ADMIN_STAGE_KEY);
+  return admin && (admin.status === "active" || admin.status === "inProgress") ? "new" : "inProgress";
 }

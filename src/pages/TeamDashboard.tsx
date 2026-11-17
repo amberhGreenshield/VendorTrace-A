@@ -2,6 +2,7 @@ import { useState } from "react";
 import Header from "../components/Header";
 import ConfirmCompleteModal from "../components/ConfirmCompleteModal";
 import { TeamViewCase, LegacyStage } from "../lib/viewAdapters";
+import HelpButton from "../components/HelpButton";
 
 const TABS: { key: LegacyStage; label: string; hint?: string }[] = [
   { key: "new", label: "New Cases" },
@@ -138,9 +139,7 @@ export default function TeamDashboard({ teamName = "Your Team", onBack, onOpenCa
           onCancel={() => setConfirmTarget(null)}
         />
       )}
-      <div style={{ position: "fixed", bottom: 24, right: 24 }}>
-        <button style={{ width: 52, height: 52, borderRadius: "50%", border: "2.5px solid #0f4c3a", background: "#fff", color: "#0f4c3a", fontSize: 22, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>?</button>
-      </div>
+      <HelpButton audience="team" />
     </div>
   );
 }

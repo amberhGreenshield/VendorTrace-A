@@ -1,6 +1,7 @@
 import Header from "../components/Header";
 import { Case } from "../lib/schema";
-import { currentStateLabel } from "../lib/boViewHelpers";
+import { currentStateLabel, boCaseBucket } from "../lib/boViewHelpers";
+import HelpButton from "../components/HelpButton";
 
 interface BusinessOwnerSnapshotProps {
   userName?: string;
@@ -12,7 +13,7 @@ interface BusinessOwnerSnapshotProps {
 
 export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpenDashboard, onNewCase, onLogout }: BusinessOwnerSnapshotProps) {
   const openCases = cases.filter((c) => c.overallStatus !== "completed").length;
-  const newCases = cases.filter((c) => c.overallStatus === "new").length;
+  const newCases = cases.filter((c) => boCaseBucket(c) === "new").length;
   const closed = cases.filter((c) => c.overallStatus === "completed").length;
   const recentlyCompleted = cases.filter((c) => c.overallStatus === "completed").slice(0, 3);
   const overviewCases = cases.slice(0, 4);
@@ -47,7 +48,7 @@ export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpen
             {recentlyCompleted.length === 0 ? (
               <div style={{ color: "#94a3b8" }}>No completed cases yet.</div>
             ) : (
-              recentlyCompleted.map((c) => <div key={c.id}>• {c.id} – {c.vendorName}</div>)
+              recentlyCompleted.map((c) => <div key={c.id}>• {c.caseNumber} – {c.vendorName}</div>)
             )}
           </div>
         </div>
@@ -70,7 +71,7 @@ export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpen
           ) : (
             overviewCases.map((c) => (
               <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 13, color: "#334155", padding: "8px 0", borderBottom: "1px solid #d7dde0" }}>
-                <span style={{ fontWeight: 700, color: "#0f4c3a", minWidth: 60 }}>{c.id}</span>
+                <span style={{ fontWeight: 700, color: "#0f4c3a", minWidth: 60 }}>{c.caseNumber}</span>
                 <span style={{ flex: 1, fontWeight: 500 }}>{c.vendorName}</span>
                 <span style={{ color: "#64748b" }}>{currentStateLabel(c)}</span>
               </div>
@@ -78,9 +79,7 @@ export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpen
           )}
         </div>
       </div>
-      <div style={{ position: "fixed", bottom: 24, right: 24 }}>
-        <button style={{ width: 52, height: 52, borderRadius: "50%", border: "2.5px solid #0f4c3a", background: "#fff", color: "#0f4c3a", fontSize: 22, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>?</button>
-      </div>
+      <HelpButton audience="bo" />
     </div>
   );
 }
