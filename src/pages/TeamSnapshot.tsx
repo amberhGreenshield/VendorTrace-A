@@ -60,8 +60,8 @@ export default function TeamSnapshot({ teamName = "Your Team", userName, cases, 
           </div>
         }
       />
-      <div style={{ display: "flex", gap: 20, padding: "28px 32px 0", alignItems: "flex-start" }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: "flex", gap: 20, padding: "28px 32px 0", alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 260px" }}>
           <div style={{ background: "#5f9ea0", color: "#fff", borderRadius: "8px 8px 0 0", padding: "8px 16px", fontSize: 13, fontWeight: 600 }}>📷 Team Snapshot</div>
           <div style={{ background: "#e8ecee", borderRadius: "0 0 8px 8px", padding: "16px", fontSize: 13, color: "#334155", lineHeight: 1.8 }}>
             <div>Open Cases: <strong>{openCases}</strong></div>
@@ -71,7 +71,7 @@ export default function TeamSnapshot({ teamName = "Your Team", userName, cases, 
             <div style={{ color: "#64748b" }}>Other open cases (view only): <strong>{otherOpen}</strong></div>
           </div>
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: "1 1 260px" }}>
           <div style={{ background: "#5f9ea0", color: "#fff", borderRadius: "8px 8px 0 0", padding: "8px 16px", fontSize: 13, fontWeight: 600, textAlign: "center" }}>Recently Completed</div>
           <div style={{ background: "#e8ecee", borderRadius: "0 0 8px 8px", padding: "16px", fontSize: 13, color: "#334155", lineHeight: 1.9 }}>
             {recentlyCompleted.length === 0 ? (

@@ -33,8 +33,8 @@ export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpen
           </div>
         }
       />
-      <div style={{ display: "flex", gap: 20, padding: "28px 32px 0", alignItems: "flex-start" }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: "flex", gap: 20, padding: "28px 32px 0", alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 260px" }}>
           <div style={{ background: "#5f9ea0", color: "#fff", borderRadius: "8px 8px 0 0", padding: "8px 16px", fontSize: 13, fontWeight: 600 }}>📷 My Case Snapshot</div>
           <div style={{ background: "#e8ecee", borderRadius: "0 0 8px 8px", padding: "16px", fontSize: 13, color: "#334155", lineHeight: 1.8 }}>
             <div>Open Cases: <strong>{openCases}</strong></div>
@@ -42,7 +42,7 @@ export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpen
             <div>Closed: <strong>{closed}</strong></div>
           </div>
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: "1 1 260px" }}>
           <div style={{ background: "#5f9ea0", color: "#fff", borderRadius: "8px 8px 0 0", padding: "8px 16px", fontSize: 13, fontWeight: 600, textAlign: "center" }}>Recently Completed</div>
           <div style={{ background: "#e8ecee", borderRadius: "0 0 8px 8px", padding: "16px", fontSize: 13, color: "#334155", lineHeight: 1.9 }}>
             {recentlyCompleted.length === 0 ? (

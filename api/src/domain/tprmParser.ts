@@ -31,7 +31,7 @@ async function readWorkbook(buffer: Buffer): Promise<Workbook> {
 
 function sheetToGrid(workbook: Workbook, sheetName: string): SheetGrid {
   const sheet = workbook.get(sheetName);
-  if (!sheet) throw new TprmParseError(`Sheet "${sheetName}" not found in workbook.`);
+  if (!sheet) throw new TprmParseError(`This workbook has no "${sheetName}" tab. Please upload the standard TPRM workbook (download a fresh copy from Step 1 if needed).`);
   return sheet;
 }
 
@@ -100,8 +100,11 @@ export async function parseTprmWorkbookBuffer(buffer: Buffer): Promise<CaseFacts
   const contractOwner = findValueByLabel(startHere, "Contract owner");
 
   if (!legalName) {
+    const hasLabel = startHere.some((row) => row.some((cell) => !isBlank(cell) && normalize(cell).includes(normalize("Legal name of third-party"))));
     throw new TprmParseError(
-      'Could not find "Legal name of third-party" in the "00 Start Here" tab. Please check this is the standard TPRM workbook template.'
+      hasLabel
+        ? 'The vendor\'s legal name is empty on the "00 Start Here" tab. Fill in Steps 1–3 of the workbook, save it, and upload it again.'
+        : 'Could not find "Legal name of third-party" in the "00 Start Here" tab. Please check this is the standard TPRM workbook template.'
     );
   }
 

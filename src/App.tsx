@@ -5,6 +5,7 @@ import { Case } from "@/lib/schema";
 import { fetchAllCases, startCaseStage, completeCaseStage, saveCaseHierarchy, updateCaseAssessment } from "@/lib/caseStore";
 import { ApiError, HierarchyEditStage, fetchMe } from "@/lib/apiClient";
 import { ADMIN_STAGE_KEY } from "@/lib/hierarchy";
+import { showNotice } from "@/lib/notice";
 import { casesForTeam, teamKeyFromLabel, TeamViewCase } from "@/lib/viewAdapters";
 
 import Login from "@/pages/Login";
@@ -138,12 +139,23 @@ export default function App() {
     setAuthPage("app");
   }
 
+  // Usually means someone else moved the case on (or an admin changed its
+  // path) since this screen loaded: refresh, then say so in plain words.
+  async function reportStageError(err: unknown, action: "start" | "complete") {
+    if (err instanceof ApiError && (err.status === 409 || err.status === 404)) {
+      await refreshCasesSilently();
+      showNotice("This case changed since your screen loaded (another person or an admin updated it). Your list has been refreshed.");
+      return;
+    }
+    showNotice(err instanceof Error ? err.message : `Couldn't ${action} this review. Please try again.`, "error");
+  }
+
   async function handleStartStage(caseId: string, stageKey: string) {
     try {
       const updated = await startCaseStage(caseId, stageKey);
       setCases((prev) => prev.map((c) => (c.id === caseId ? updated : c)));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to start this stage. Please try again.");
+      await reportStageError(err, "start");
     }
   }
 
@@ -152,7 +164,7 @@ export default function App() {
       const updated = await completeCaseStage(caseId, stageKey, authUser?.name ?? "Unknown");
       setCases((prev) => prev.map((c) => (c.id === caseId ? updated : c)));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to complete this stage. Please try again.");
+      await reportStageError(err, "complete");
     }
   }
 

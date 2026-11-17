@@ -45,10 +45,18 @@ export default function AdminPanel({ actingAdminEmail, onBack }: AdminPanelProps
       setSubmitError("Name, email, and team are all required.");
       return;
     }
+    if (!/^[^\s@]+@greenshield\.ca$/i.test(email.trim())) {
+      setSubmitError("Enter a GreenShield work email (name@greenshield.ca).");
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await addTeamMember({ actingAdminEmail, name: name.trim(), email: email.trim(), teamName, isAdmin: makeAdmin });
-      setSuccessMessage(`Added ${result.name} to ${result.teamName}${result.isAdmin ? " as an admin" : ""}.`);
+      setSuccessMessage(
+        result.alreadyMember
+          ? `${result.name} is already on ${result.teamName}${result.isAdmin ? " (admin)" : ""}.`
+          : `Added ${result.name} to ${result.teamName}${result.isAdmin ? " as an admin" : ""}.`
+      );
       setName("");
       setEmail("");
       setMakeAdmin(false);

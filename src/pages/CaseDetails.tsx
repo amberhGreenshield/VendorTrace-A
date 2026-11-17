@@ -23,6 +23,12 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
     <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "#f1f5f9" }}>
       <Header onBack={onBack} title={"Case: " + c.caseNumber} subtitle={"Vendor: " + c.vendorName} />
       <CaseHierarchyBanner case_={c.raw} />
+      {c.stage === "completed" && (
+        <div style={{ margin: "10px 32px 0", background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#065f46" }}>
+          ✅ <strong>{teamName} review complete.</strong>{" "}
+          {c.raw.overallStatus === "completed" ? "This case has been fully signed off." : <>It has moved on and is now with {c.currentlyWith}.</>}
+        </div>
+      )}
       {(c.stage === "other" || c.stage === "upcoming") && (
         <div
           style={{

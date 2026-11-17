@@ -50,7 +50,7 @@ export default function BusinessOwnerDashboard({ onBack, onOpenCase, onNewCase, 
           )}
         </div>
       )}
-      <div style={{ display: "flex", gap: 16, padding: "20px 32px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 16, padding: "20px 32px 0", alignItems: "center", flexWrap: "wrap" }}>
         {(["new", "inProgress", "completed"] as TabKey[]).map((s) => (
           <div key={s} style={{ background: "#fff", borderRadius: 10, padding: "10px 20px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 90 }}>
             <span style={{ fontSize: 24, fontWeight: 700, color: "#334155" }}>{counts[s]}</span>
@@ -66,7 +66,7 @@ export default function BusinessOwnerDashboard({ onBack, onOpenCase, onNewCase, 
           </button>
         )}
       </div>
-      <div style={{ display: "flex", gap: 8, padding: "20px 32px 0" }}>
+      <div style={{ display: "flex", gap: 8, padding: "20px 32px 0", flexWrap: "wrap" }}>
         {TABS.map((tab) => {
           const active = activeTab === tab.key;
           return (
@@ -86,7 +86,7 @@ export default function BusinessOwnerDashboard({ onBack, onOpenCase, onNewCase, 
               No {activeTab === "new" ? "new" : activeTab === "inProgress" ? "in-progress" : "completed"} cases.
             </div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                   <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, color: "#64748b" }}>Case ID</th>
@@ -129,7 +129,7 @@ export default function BusinessOwnerDashboard({ onBack, onOpenCase, onNewCase, 
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>

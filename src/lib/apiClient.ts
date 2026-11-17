@@ -62,7 +62,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_BASE}${path}`, init);
   } catch {
-    throw new ApiError(`Couldn't reach the API at ${API_BASE}. Is it running?`);
+    throw new ApiError("VendorTrace can't reach its server right now. Check your connection and try again in a minute.");
   }
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
@@ -170,7 +170,7 @@ export function addTeamMember(params: {
   email: string;
   teamName: string;
   isAdmin?: boolean;
-}): Promise<{ userId: number; name: string; email: string; teamName: string; isAdmin: boolean }> {
+}): Promise<{ userId: number; name: string; email: string; teamName: string; isAdmin: boolean; alreadyMember?: boolean }> {
   return request("/api/team-members", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
