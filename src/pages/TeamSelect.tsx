@@ -11,16 +11,35 @@ interface Props {
 export default function TeamSelect({ user, onJoined }: Props) {
   const [teamList, setTeamList] = useState<{ id: number; name: string; memberCount: number }[]>([]);
   const [joining, setJoining] = useState<number | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    mockGetTeams().then(setTeamList);
+    fetchTeams()
+      .then((teams) =>
+        setTeamList(
+          teams
+            .filter((t) => t.name !== "Admin")
+            .map((t) => ({ id: t.id, name: t.name, memberCount: t.members.length }))
+        )
+      )
+      .catch(() => setError("Couldn't load the team list. Please refresh and try again."));
   }, []);
 
   async function handleJoin(teamId: number) {
+    const team = teamList.find((t) => t.id === teamId);
+    if (!team) return;
     setJoining(teamId);
+    setError("");
     try {
-      const updated = await mockJoinTeam(user, teamId);
-      onJoined(updated);
+      const saved = await saveMyRole({ name: user.name, email: user.email, role: "team", teamName: team.name });
+      onJoined({
+        ...user,
+        role: "team",
+        team: { id: team.id, name: team.name, memberCount: team.memberCount + 1 },
+        isAdmin: (saved as { isAdmin?: boolean }).isAdmin === true,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't join that team. Please try again.");
     } finally {
       setJoining(null);
     }
@@ -34,6 +53,7 @@ export default function TeamSelect({ user, onJoined }: Props) {
       <div style={{ maxWidth: 680, margin: "40px auto", padding: "0 24px" }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f4c3a", marginBottom: 8 }}>Welcome, {user.name}!</h2>
         <p style={{ fontSize: 14, color: "#64748b", marginBottom: 28 }}>Select your team to continue.</p>
+        {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#dc2626", marginBottom: 16 }}>{error}</div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
           {teamList.map((team) => (
             <div key={team.id} style={{ background: "#fff", borderRadius: 10, padding: "18px 16px", boxShadow: "0 1px 6px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column", gap: 8 }}>

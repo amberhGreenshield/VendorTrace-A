@@ -8,6 +8,7 @@ import BoAssessmentTasks from "../components/BoAssessmentTasks";
 import { Case } from "../lib/schema";
 import { currentStateLabel, assessmentsToCompleteList, completedFormsAndAssessments, requiresUpGuard } from "../lib/boViewHelpers";
 import { nextReviewTeam, onboardingDurationDays } from "../lib/caseEngine";
+import HelpButton from "../components/HelpButton";
 
 interface BusinessOwnerCaseDetailsProps {
   case_: Case;
@@ -145,16 +146,14 @@ export default function BusinessOwnerCaseDetails({ case_: c, onBack, onMarkAsses
       {undoError && <div style={{ padding: "8px 32px 0", fontSize: 12, color: "#dc2626" }}>{undoError}</div>}
       {assessmentsToComplete.length > 0 && (
         <div style={{ padding: "8px 32px 24px", fontSize: 12, color: "#64748b" }}>
-          📎 Click any assessment card above to open the document in SharePoint. Contact{" "}
+          📎 {c.sharepointFolderUrl ? "Click any assessment card above to open the document in SharePoint. " : ""}Contact{" "}
           <a href="mailto:data.ai.governance@greenshield.ca" style={{ color: "#0f4c3a" }}>
             data.ai.governance@greenshield.ca
           </a>{" "}
           for Data &amp; AI Impact Assessment guidance.
         </div>
       )}
-      <div style={{ position: "fixed", bottom: 24, right: 24 }}>
-        <button style={{ width: 52, height: 52, borderRadius: "50%", border: "2.5px solid #0f4c3a", background: "#fff", color: "#0f4c3a", fontSize: 22, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>?</button>
-      </div>
+      <HelpButton audience="bo" />
     </div>
   );
 }

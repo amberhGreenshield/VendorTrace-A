@@ -6,6 +6,7 @@ import CaseHierarchyBanner from "../components/CaseHierarchyBanner";
 import RequiredAssessmentNotice from "../components/RequiredAssessmentNotice";
 import ConfirmCompleteModal from "../components/ConfirmCompleteModal";
 import { TeamViewCase } from "../lib/viewAdapters";
+import HelpButton from "../components/HelpButton";
 
 interface CaseDetailsProps {
   viewCase: TeamViewCase;
@@ -133,9 +134,7 @@ export default function CaseDetails({ viewCase: c, teamName, onBack, onStart, on
           onCancel={() => setConfirming(false)}
         />
       )}
-      <div style={{ position: "fixed", bottom: 24, right: 24 }}>
-        <button style={{ width: 52, height: 52, borderRadius: "50%", border: "2.5px solid #0f4c3a", background: "#fff", color: "#0f4c3a", fontSize: 22, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>?</button>
-      </div>
+      <HelpButton audience="team" />
     </div>
   );
 }

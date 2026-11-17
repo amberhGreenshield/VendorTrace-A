@@ -1,6 +1,12 @@
 import { useState } from "react";
 import Header from "../components/Header";
-import { Case, TEAM_LABELS } from "../lib/schema";
+import { AssessmentKey, Case, TEAM_LABELS } from "../lib/schema";
+
+const ASSESSMENT_LABELS: Record<AssessmentKey, string> = {
+  PIA: "Privacy Impact Assessment (PIA)",
+  DataAIImpactAssessment: "Data & AI Impact Assessment",
+  UpguardAssessment: "UpGuard Security Assessment",
+};
 import { parseTprmWorkbook, TprmParseError } from "../lib/tprmParser";
 import { evaluateRules } from "../lib/rulesEngine";
 import { createCaseViaApi } from "../lib/caseStore";
@@ -36,7 +42,7 @@ export default function NewCaseIntake({ businessOwner, businessOwnerEmail, onBac
       setPreview(facts);
       setTriggeredTeams(Array.from(evaluation.triggeredTeams).map((t) => TEAM_LABELS[t]));
       setRequiredAssessments(
-        Array.from(evaluation.requiredAssessments).map((a) => (a === "PIA" ? "Privacy Impact Assessment (PIA)" : "Data & AI Impact Assessment"))
+        Array.from(new Set(evaluation.requiredAssessments)).map((a) => ASSESSMENT_LABELS[a] ?? a)
       );
       setStep("preview");
     } catch (err) {
