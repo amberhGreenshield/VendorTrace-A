@@ -1,21 +1,22 @@
 import { Configuration, LogLevel } from "@azure/msal-browser";
 
-// ─── Fill these in once you register a SEPARATE app for sign-in ───────────
-// This should be a different Entra ID app registration than the one used
-// for Graph/SharePoint calls in api/ — that one is a confidential client
-// (has a secret, used server-to-server). This one is a PUBLIC client (no
-// secret — it runs in the browser where a secret can't be kept safe) used
-// for interactive/silent user sign-in.
-//
-// When registering it in the Portal:
-//   - Platform: "Single-page application (SPA)"
-//   - Redirect URI: your Static Web App's URL (e.g. https://your-app.azurestaticapps.net)
-//     — for local dev, also add http://localhost:5173
-//   - API permissions: Microsoft Graph → Delegated → User.Read (this is
-//     enough to read the signed-in person's name/email; no admin consent
-//     needed for this one, delegated User.Read is pre-consented by default)
+// ─── Microsoft sign-in (Entra ID) ───────────────────────────────────────────
+// Two app registrations (approved by Security Architecture):
+//   - "VendorTrace Web"  — this SPA signs users in with it (public client,
+//     authorization code + PKCE, no secret). Its client ID is the GitHub
+//     variable VITE_MSAL_CLIENT_ID.
+//   - "VendorTrace API"  — exposes the delegated scope `access_as_user`. The
+//     SPA asks for a token for that scope and sends it on every API call;
+//     the API checks it (api/src/auth/entraAuth.ts). The full scope string
+//     is the GitHub variable VITE_MSAL_API_SCOPE, e.g.
+//     api://<VendorTrace API client ID>/access_as_user
+// Redirect URIs registered on VendorTrace Web (SPA platform), trailing slash
+// included: https://red-tree-07300420f.7.azurestaticapps.net/ and
+// http://localhost:5173/
 
 export const MSAL_CLIENT_ID = import.meta.env.VITE_MSAL_CLIENT_ID;
+/** Scope for the VendorTrace API. Unset = no token is sent (before the registrations exist / demo). */
+export const API_SCOPE: string | undefined = import.meta.env.VITE_MSAL_API_SCOPE?.trim() || undefined;
 export const MSAL_TENANT_ID =
   import.meta.env.VITE_MSAL_TENANT_ID ?? "92c35dd7-ce82-4780-95b1-7a86113d755c";
   
@@ -27,13 +28,15 @@ export const msalConfig: Configuration = {
   auth: {
     clientId: MSAL_CLIENT_ID,
     authority: `https://login.microsoftonline.com/${MSAL_TENANT_ID}`,
-    redirectUri: window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
+    // Must match the registered redirect URIs exactly, including the "/".
+    redirectUri: window.location.origin + "/",
+    postLogoutRedirectUri: window.location.origin + "/",
   },
   cache: {
-    // localStorage (not the default sessionStorage) so a sign-in survives
-    // closing the tab — closer to "stay signed in" behavior people expect.
-    cacheLocation: "localStorage",
+    // Tokens live only for this browser session, so they don't stay on a
+    // shared computer. People already signed in to Microsoft 365 still get
+    // straight back in through silent single sign-on.
+    cacheLocation: "sessionStorage",
     storeAuthStateInCookie: false,
   },
   system: {
@@ -46,5 +49,9 @@ export const msalConfig: Configuration = {
 };
 
 export const loginRequest = {
-  scopes: ["openid", "profile", "email"],
+  // Asking for the API scope at sign-in too means one consent/sign-in covers both.
+  scopes: ["openid", "profile", "email", ...(API_SCOPE ? [API_SCOPE] : [])],
 };
+
+/** Token request for calls to the VendorTrace API. */
+export const apiTokenRequest = API_SCOPE ? { scopes: [API_SCOPE] } : null;

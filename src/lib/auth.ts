@@ -2,8 +2,9 @@
 // `homeAccountId`). On sign-in, the app looks up this person's email
 // against the real database (GET /api/me) to find out if they've already
 // been provisioned onto a team by an admin — see apiClient.ts's `fetchMe`.
-// Still cached in localStorage per-device so repeat visits don't need to
-// re-fetch, but the database is the source of truth now, not this cache.
+// Cached for the browser session only (sessionStorage, like the Microsoft
+// sign-in itself), so nothing about the last person stays behind on a shared
+// computer once the browser is closed. The database is the source of truth.
 
 const PROFILES_KEY = "procurement_profiles_v2";
 
@@ -33,9 +34,17 @@ export interface UserProfile {
   isCaseAdmin?: boolean;
 }
 
+// Older builds kept these in localStorage; clear them so they don't linger.
+try {
+  localStorage.removeItem("procurement_profiles_v2");
+  localStorage.removeItem("procurement_active_account_id");
+} catch {
+  // storage unavailable — nothing to clean up
+}
+
 function loadProfiles(): Record<string, UserProfile> {
   try {
-    const raw = localStorage.getItem(PROFILES_KEY);
+    const raw = sessionStorage.getItem(PROFILES_KEY);
     return raw ? (JSON.parse(raw) as Record<string, UserProfile>) : {};
   } catch {
     return {};
@@ -43,7 +52,11 @@ function loadProfiles(): Record<string, UserProfile> {
 }
 
 function saveProfiles(profiles: Record<string, UserProfile>): void {
-  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+  try {
+    sessionStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+  } catch {
+    // storage unavailable (private mode etc.) — the app still works for this page load
+  }
 }
 
 export function getProfileForAccount(accountId: string): UserProfile | null {
@@ -60,16 +73,29 @@ export function saveProfileForAccount(profile: UserProfile): void {
 const ACTIVE_ACCOUNT_KEY = "procurement_active_account_id";
 
 export function getAuthUser(): UserProfile | null {
-  const accountId = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+  let accountId: string | null = null;
+  try {
+    accountId = sessionStorage.getItem(ACTIVE_ACCOUNT_KEY);
+  } catch {
+    return null;
+  }
   if (!accountId) return null;
   return getProfileForAccount(accountId);
 }
 
 export function setAuthUser(user: UserProfile): void {
   saveProfileForAccount(user);
-  localStorage.setItem(ACTIVE_ACCOUNT_KEY, user.accountId);
+  try {
+    sessionStorage.setItem(ACTIVE_ACCOUNT_KEY, user.accountId);
+  } catch {
+    // storage unavailable — signed in for this page load only
+  }
 }
 
 export function clearAuthUser(): void {
-  localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+  try {
+    sessionStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+  } catch {
+    // nothing to clear
+  }
 }

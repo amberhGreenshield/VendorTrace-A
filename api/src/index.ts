@@ -5,10 +5,11 @@ import { casesRouter } from "./routes/cases.js";
 import { usersRouter } from "./routes/users.js";
 import { runAssessmentReminders, startReminderScheduler } from "./jobs/assessmentReminders.js";
 import { migrateOnStart } from "./jobs/migrateOnStart.js";
+import { allowedOrigins, entraAuth } from "./auth/entraAuth.js";
 
 const app = express();
 // Don't advertise the framework, and send baseline security headers on every
-// response. (CORS and authentication are tightened in the SSO lockdown work.)
+// response.
 app.disable("x-powered-by");
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -18,12 +19,11 @@ app.use((_req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
   next();
 });
-app.use(cors());
+// Only the VendorTrace website (and local dev) may call the API from a browser.
+app.use(cors({ origin: allowedOrigins(), allowedHeaders: ["Content-Type", "Authorization"] }));
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
-app.use("/api/cases", casesRouter);
-app.use("/api", usersRouter);
 
 // Manual / external trigger for the reminder job (e.g. an Azure Logic App or
 // GitHub Actions schedule, if the API isn't set to "Always On"). Protected by
@@ -38,6 +38,11 @@ app.post("/api/jobs/assessment-reminders", async (req, res) => {
     res.status(500).json({ error: "Reminder run failed" });
   }
 });
+
+// Everything below needs a valid Microsoft sign-in token (see auth/entraAuth.ts).
+app.use("/api", entraAuth());
+app.use("/api/cases", casesRouter);
+app.use("/api", usersRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 // Bring the database schema up to date first, then start serving.

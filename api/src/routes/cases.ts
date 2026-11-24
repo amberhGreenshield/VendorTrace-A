@@ -108,8 +108,9 @@ casesRouter.get("/:id", async (req, res) => {
  */
 casesRouter.post("/", upload.single("tprmFile"), async (req, res) => {
   const file = req.file;
-  const businessOwner = req.body.businessOwner as string | undefined;
-  const businessOwnerEmail = req.body.businessOwnerEmail as string | undefined;
+  // Signed in → the person submitting is the Business Owner.
+  const businessOwner = req.auth?.name ?? (req.body.businessOwner as string | undefined);
+  const businessOwnerEmail = req.auth?.email ?? (req.body.businessOwnerEmail as string | undefined);
   if (!file) return res.status(400).json({ error: "tprmFile is required (multipart/form-data)" });
   if (!businessOwner) return res.status(400).json({ error: "businessOwner is required" });
 
@@ -187,6 +188,9 @@ casesRouter.post("/:id/stages/:stageKey/start", async (req, res) => {
     where: { caseId: req.params.id, stageKey: req.params.stageKey },
   });
   if (!stage) return res.status(404).json({ error: "Stage not found" });
+  if (!(await mayActForTeam(req.auth?.email, stage.team as TeamKey, req.auth !== undefined))) {
+    return res.status(403).json({ error: `Only the ${TEAM_LABELS[stage.team as TeamKey] ?? stage.team} team can start this review.` });
+  }
   if (stage.status !== "active") return res.status(409).json({ error: `Stage is "${stage.status}", not active` });
 
   await prisma.caseStage.update({ where: { id: stage.id }, data: { status: "inProgress" } });
@@ -201,13 +205,16 @@ casesRouter.post("/:id/stages/:stageKey/start", async (req, res) => {
 
 // POST /api/cases/:id/stages/:stageKey/complete  { completedBy: string }
 casesRouter.post("/:id/stages/:stageKey/complete", async (req, res) => {
-  const { completedBy } = req.body as { completedBy?: string };
+  const completedBy = req.auth?.name ?? (req.body as { completedBy?: string }).completedBy;
   if (!completedBy) return res.status(400).json({ error: "completedBy is required" });
 
   const stage = await prisma.caseStage.findFirst({
     where: { caseId: req.params.id, stageKey: req.params.stageKey },
   });
   if (!stage) return res.status(404).json({ error: "Stage not found" });
+  if (!(await mayActForTeam(req.auth?.email, stage.team as TeamKey, req.auth !== undefined))) {
+    return res.status(403).json({ error: `Only the ${TEAM_LABELS[stage.team as TeamKey] ?? stage.team} team can complete this review.` });
+  }
   if (stage.status !== "inProgress" && stage.status !== "active") {
     return res.status(409).json({ error: `Stage is "${stage.status}", can't be completed` });
   }
@@ -277,12 +284,14 @@ casesRouter.post("/:id/stages/:stageKey/complete", async (req, res) => {
  *     that the hierarchy was customized.
  */
 casesRouter.put("/:id/hierarchy", async (req, res) => {
-  const { actingAdminEmail, stages: edit, expectedUpdatedAt } = req.body as {
+  const body = req.body as {
     actingAdminEmail?: string;
     stages?: HierarchyEditStage[];
     /** The case's updatedAt as the editor saw it. If it's changed since, the edit is rejected so it can't be applied to a hierarchy the admin hasn't seen. */
     expectedUpdatedAt?: string;
   };
+  const actingAdminEmail = req.auth?.email ?? body.actingAdminEmail;
+  const { stages: edit, expectedUpdatedAt } = body;
   if (!actingAdminEmail) return res.status(400).json({ error: "actingAdminEmail is required" });
   if (!Array.isArray(edit)) return res.status(400).json({ error: "stages must be an array" });
   if (!(await isCaseAdminEmail(actingAdminEmail))) {
@@ -439,6 +448,22 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
 });
 
 
+/**
+ * Who may start/complete a team's review step: a member of that team, or a
+ * case admin. Only enforced for verified sign-ins — without a token (demo
+ * sign-in while AUTH_REQUIRED is off) there's no trustworthy identity to
+ * check, so the old behaviour is kept.
+ */
+async function mayActForTeam(email: string | undefined, team: TeamKey, verified: boolean): Promise<boolean> {
+  if (!verified) return true;
+  if (!email) return false;
+  const user = await prisma.user.findUnique({ where: { email }, include: { memberOf: { include: { team: true } } } });
+  if (!user || !user.active) return false;
+  if (user.role === "admin") return true;
+  const teamName = TEAM_LABELS[team] ?? team;
+  return user.memberOf.some((m: (typeof user.memberOf)[number]) => m.team.name === teamName);
+}
+
 // ─── Business owner marks an assessment complete ────────────────────────────
 
 /**
@@ -485,7 +510,9 @@ async function teamEmails(teamKey: TeamKey): Promise<string[]> {
  * Both are idempotent.
  */
 casesRouter.post("/:id/assessments/:key/:action(complete|reopen)", async (req, res) => {
-  const { actingEmail, actingName } = req.body as { actingEmail?: string; actingName?: string };
+  const body = req.body as { actingEmail?: string; actingName?: string };
+  const actingEmail = req.auth?.email ?? body.actingEmail;
+  const actingName = req.auth?.name ?? body.actingName;
   const { id, key, action } = req.params as { id: string; key: AssessmentKey; action: "complete" | "reopen" };
 
   const c = await prisma.case.findUnique({ where: { id }, include: { stages: true, assessments: true } });

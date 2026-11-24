@@ -1,4 +1,7 @@
+import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { Case, CaseStage, TeamKey } from "./schema";
+import { apiTokenRequest } from "./msalConfig";
+import { msalInstance } from "./msalInstance";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
@@ -57,10 +60,35 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A Microsoft access token for the VendorTrace API, or null when there's
+ * nothing to send (API scope not configured yet, or a demo account with no
+ * Microsoft sign-in). If Microsoft needs the user to sign in again, this
+ * sends them to the sign-in page.
+ */
+async function getApiToken(): Promise<string | null> {
+  if (!apiTokenRequest) return null;
+  const account = msalInstance.getActiveAccount() ?? msalInstance.getAllAccounts()[0];
+  if (!account) return null;
+  try {
+    const result = await msalInstance.acquireTokenSilent({ ...apiTokenRequest, account });
+    return result.accessToken;
+  } catch (err) {
+    if (err instanceof InteractionRequiredAuthError) {
+      await msalInstance.acquireTokenRedirect({ ...apiTokenRequest, account });
+      throw new ApiError("Taking you to Microsoft to sign in again…");
+    }
+    throw new ApiError("Couldn't confirm your Microsoft sign-in. Please refresh the page and try again.");
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = await getApiToken();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, init);
+    res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch {
     throw new ApiError("VendorTrace can't reach its server right now. Check your connection and try again in a minute.");
   }
