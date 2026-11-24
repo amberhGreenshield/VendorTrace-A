@@ -11,15 +11,25 @@ export const usersRouter = Router();
  * to Business Owner" rather than an error.
  */
 usersRouter.get("/me", async (req, res) => {
-  const email = String(req.query.email ?? "").trim().toLowerCase();
+  // Signed in with a verified token → it's that person, whatever the URL says.
+  const email = (req.auth?.email ?? String(req.query.email ?? "")).trim().toLowerCase();
   if (!email) return res.status(400).json({ error: "email is required" });
 
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { email },
     include: { memberOf: { include: { team: true } } },
   });
 
   if (!user) return res.json({ found: false });
+
+  // First verified sign-in: link the database record to the person's Entra ID.
+  if (req.auth && !user.azureObjectId) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { azureObjectId: req.auth.oid },
+      include: { memberOf: { include: { team: true } } },
+    });
+  }
 
   res.json({
     found: true,
@@ -57,20 +67,20 @@ usersRouter.get("/teams", async (_req, res) => {
  * people to ANY team, not just their own — see api/README.md for the
  * reasoning. Creates the User row if this is a brand new email.
  *
- * NOTE: this checks `actingAdminEmail` against the database, but doesn't
- * verify a real auth token yet (no token validation exists in this API at
- * all currently — see ROADMAP.md item 1). Anyone who knows an admin's email
- * could currently claim to be them. Harden this once real SSO token
- * validation is wired in.
+ * With a verified sign-in token, the acting admin is the token's user and
+ * any `actingAdminEmail` in the body is ignored. Without one (only possible
+ * while AUTH_REQUIRED is off, e.g. demo sign-in), the body value is used.
  */
 usersRouter.post("/team-members", async (req, res) => {
-  const { actingAdminEmail, name, email, teamName, isAdmin } = req.body as {
+  const body = req.body as {
     actingAdminEmail?: string;
     name?: string;
     email?: string;
     teamName?: string;
     isAdmin?: boolean;
   };
+  const actingAdminEmail = req.auth?.email ?? body.actingAdminEmail;
+  const { name, email, teamName, isAdmin } = body;
   if (!actingAdminEmail || !name || !email || !teamName) {
     return res.status(400).json({ error: "actingAdminEmail, name, email, and teamName are all required" });
   }
@@ -121,12 +131,16 @@ usersRouter.post("/team-members", async (req, res) => {
 //Add the persistence endpoint
 
 usersRouter.post("/me/profile", async (req, res) => {
-  const { name, email, role, teamName } = req.body as {
+  const body = req.body as {
     name?: string;
     email?: string;
     role?: "team" | "businessOwner";
     teamName?: string;
   };
+  // Signed in → name and email come from Microsoft, not the request.
+  const name = req.auth?.name ?? body.name;
+  const email = req.auth?.email ?? body.email;
+  const { role, teamName } = body;
 
   if (!name || !email || !role) {
     return res.status(400).json({
@@ -139,6 +153,14 @@ usersRouter.post("/me/profile", async (req, res) => {
   if (!normalizedEmail.endsWith("@greenshield.ca")) {
     return res.status(403).json({
       error: "Only GreenShield accounts can use VendorTrace.",
+    });
+  }
+
+  // With real sign-in, people can't put themselves on a review team: an
+  // admin adds them (and later Saviynt). Only "Business Owner" is self-service.
+  if (req.auth && role === "team") {
+    return res.status(403).json({
+      error: "Review-team access is set up by the VendorTrace admin. Ask them to add you to your team, then sign in again.",
     });
   }
 

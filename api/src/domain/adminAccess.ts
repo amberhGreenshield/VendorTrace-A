@@ -10,9 +10,9 @@ import { prisma } from "../db.js";
  * BOOTSTRAP_ADMINS list there (or update the row directly) rather than
  * exposing a "make case admin" button in the UI.
  *
- * Same caveat as the rest of this API: there's no token validation yet
- * (ROADMAP.md item 1), so `actingAdminEmail` is trusted from the request
- * body. Harden this once SSO tokens are verified server-side.
+ * With a verified Entra token the email passed in is the token's user (see
+ * auth/entraAuth.ts); the request-body email is only used while
+ * AUTH_REQUIRED is off (demo sign-in).
  */
 export async function isCaseAdminEmail(email: string | undefined): Promise<boolean> {
   if (!email) return false;
