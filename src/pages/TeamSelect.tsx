@@ -36,7 +36,7 @@ export default function TeamSelect({ user, onJoined }: Props) {
         ...user,
         role: "team",
         team: { id: team.id, name: team.name, memberCount: team.memberCount + 1 },
-        isAdmin: (saved as { isAdmin?: boolean }).isAdmin === true,
+        reviewTeams: [{ id: team.id, name: team.name }],
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't join that team. Please try again.");

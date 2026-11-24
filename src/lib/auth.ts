@@ -19,19 +19,14 @@ export interface UserProfile {
   role: UserRole;
   team?: { id: number; name: string; memberCount: number };
   /**
-   * True if the database says this person is an admin (on ANY team — see
-   * api/README.md). Admins get an "Add Team Member" panel. This is looked
-   * up fresh from the API on every sign-in, not something the user picks.
-   */
-  isAdmin?: boolean;
-  /**
-   * True only for case admins (User.role = "admin" in the database — just
-   * Amber for now, see api/prisma/seed.ts). Case admins get the Admin Inbox,
-   * where every new case lands first, and can rearrange a case's review
-   * hierarchy. Distinct from `isAdmin` above, which is only about adding
-   * people to teams.
+   * Case admins (Saviynt role VendorTrace.CaseAdmin) get the Admin Inbox:
+   * every open case, new cases to check, and the review-hierarchy editor.
    */
   isCaseAdmin?: boolean;
+  /** May use the Business Owner view (submit and track vendor assessments). */
+  isBusinessOwner?: boolean;
+  /** Every review team this person is on — they can switch between them. */
+  reviewTeams?: { id: number; name: string }[];
 }
 
 // Older builds kept these in localStorage; clear them so they don't linger.

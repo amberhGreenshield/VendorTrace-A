@@ -46,9 +46,11 @@ the **Admin Inbox**, can rearrange the hierarchy with drag and drop, then
 release it (completing `admin-review`), which activates step 1 of the edited
 hierarchy.
 
-- **Who is a case admin:** `User.role = "admin"`. Seeded for Amber Hashwani
-  only (`CASE_ADMINS` in `prisma/seed.ts`). This is separate from
-  `TeamMember.isAdmin`, which only controls adding people to teams.
+- **Who is a case admin:** anyone with the Entra app role
+  `VendorTrace.CaseAdmin` (assigned through Saviynt). Before the app roles
+  exist, `User.role = "admin"` in the database (seeded in `prisma/seed.ts`).
+  A case admin can see every open case, check new cases in the Admin Inbox
+  and change review hierarchies — nothing else comes with that role.
 - **What can be edited:** anything where work hasn't started. In-progress
   and completed stages, and the Admin Review stage itself, are locked. A
   team that has been handed the case but hasn't clicked Start yet can still
@@ -199,3 +201,21 @@ and expect to iterate, especially the async copy-and-poll logic in
 `src/domain/notificationService.ts` currently logs instead of sending. Pick
 one of the three options in that file's comments (Graph `sendMail`, Azure
 Communication Services, or SendGrid) and only `sendEmail()` needs to change.
+
+## Access and roles (Saviynt)
+
+Access is managed in **Saviynt** as Entra app roles on the "VendorTrace API"
+app registration; see `src/auth/access.ts`. VendorTrace has no screen for
+adding people.
+
+| App role value | What it allows |
+|---|---|
+| `VendorTrace.CaseAdmin` | All open cases, Admin Inbox, review-hierarchy editor |
+| `VendorTrace.BusinessOwner` | Submit vendor assessments; track and complete their own cases |
+| `VendorTrace.Reviewer.<Team>` | Review that team's steps. `<Team>` is one of `PVM`, `BusinessArchitecture`, `Risk`, `Privacy`, `Data`, `AI`, `SecurityGovernance`, `SecurityArchitecture`, `EnterpriseArchitecture` |
+
+Once a sign-in token carries any `VendorTrace.*` role, the token decides
+access and the database copy (`User.role`, `TeamMember`) is updated to
+match on each sign-in (used for team notifications). Until then the
+database decides. People with several roles switch with **View as** in the
+header.

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Header from "../components/Header";
 import { TeamViewCase } from "../lib/viewAdapters";
 import HelpButton from "../components/HelpButton";
@@ -9,14 +10,15 @@ interface TeamSnapshotProps {
   onOpenDashboard: () => void;
   onLogout?: () => void;
   /** True if the database says this person is an admin (see api/README.md). */
-  isAdmin?: boolean;
-  onOpenAdminPanel?: () => void;
+  isCaseAdmin?: boolean;
+  /** "View as" picker for people with several VendorTrace roles. */
+  viewSwitcher?: ReactNode;
   /** Case admins only — opens the Admin Inbox / hierarchy editor. */
   onOpenAdminInbox?: () => void;
   adminInboxCount?: number;
 }
 
-export default function TeamSnapshot({ teamName = "Your Team", userName, cases, onOpenDashboard, onLogout, isAdmin, onOpenAdminPanel, onOpenAdminInbox, adminInboxCount }: TeamSnapshotProps) {
+export default function TeamSnapshot({ teamName = "Your Team", userName, cases, onOpenDashboard, onLogout, isCaseAdmin, viewSwitcher, onOpenAdminInbox, adminInboxCount }: TeamSnapshotProps) {
   // "Other" cases (not this team's) are visibility-only — they don't count
   // toward the team's workload or show in its overview.
   const ours = cases.filter((c) => c.stage !== "other");
@@ -35,20 +37,12 @@ export default function TeamSnapshot({ teamName = "Your Team", userName, cases, 
         subtitle={userName ? teamName + " team" : undefined}
         rightContent={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {isAdmin && (
+            {isCaseAdmin && (
               <span style={{ background: "rgba(255,255,255,0.18)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>
-                Admin
+                Case Admin
               </span>
             )}
-            <span style={{ fontSize: 14, opacity: 0.85 }}>Team View</span>
-            {onOpenAdminPanel && (
-              <button
-                onClick={onOpenAdminPanel}
-                style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                + Add Team Member
-              </button>
-            )}
+            {viewSwitcher ?? <span style={{ fontSize: 14, opacity: 0.85 }}>Team View</span>}
             {onLogout && (
               <button
                 onClick={onLogout}

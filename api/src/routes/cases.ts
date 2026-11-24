@@ -14,7 +14,8 @@ import {
   isCaseFullyComplete,
 } from "../domain/hierarchy.js";
 import { ASSESSMENT_OWNER_TEAMS, assessmentChangesForHierarchyEdit, assessmentStatusChanges } from "../domain/caseEngine.js";
-import { isCaseAdminEmail } from "../domain/adminAccess.js";
+import { resolveAccess } from "../auth/access.js";
+import type { Request } from "express";
 import { assessmentLabel, assessmentNote, createCaseFolder, ensureAssessmentDocument } from "../domain/sharepointService.js";
 import { notifyAssessmentCompleted, notifyAssessmentReopened, notifyCaseReadyForTeam } from "../domain/notificationService.js";
 import { AssessmentKey, CaseStage, TEAM_LABELS, TeamKey } from "../domain/schema.js";
@@ -188,7 +189,7 @@ casesRouter.post("/:id/stages/:stageKey/start", async (req, res) => {
     where: { caseId: req.params.id, stageKey: req.params.stageKey },
   });
   if (!stage) return res.status(404).json({ error: "Stage not found" });
-  if (!(await mayActForTeam(req.auth?.email, stage.team as TeamKey, req.auth !== undefined))) {
+  if (!(await mayActForTeam(req, stage.team as TeamKey))) {
     return res.status(403).json({ error: `Only the ${TEAM_LABELS[stage.team as TeamKey] ?? stage.team} team can start this review.` });
   }
   if (stage.status !== "active") return res.status(409).json({ error: `Stage is "${stage.status}", not active` });
@@ -212,7 +213,7 @@ casesRouter.post("/:id/stages/:stageKey/complete", async (req, res) => {
     where: { caseId: req.params.id, stageKey: req.params.stageKey },
   });
   if (!stage) return res.status(404).json({ error: "Stage not found" });
-  if (!(await mayActForTeam(req.auth?.email, stage.team as TeamKey, req.auth !== undefined))) {
+  if (!(await mayActForTeam(req, stage.team as TeamKey))) {
     return res.status(403).json({ error: `Only the ${TEAM_LABELS[stage.team as TeamKey] ?? stage.team} team can complete this review.` });
   }
   if (stage.status !== "inProgress" && stage.status !== "active") {
@@ -294,7 +295,7 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
   const { stages: edit, expectedUpdatedAt } = body;
   if (!actingAdminEmail) return res.status(400).json({ error: "actingAdminEmail is required" });
   if (!Array.isArray(edit)) return res.status(400).json({ error: "stages must be an array" });
-  if (!(await isCaseAdminEmail(actingAdminEmail))) {
+  if (!(await resolveAccess(req, actingAdminEmail)).isCaseAdmin) {
     return res.status(403).json({ error: "Only a case admin can change a review hierarchy." });
   }
 
@@ -449,34 +450,30 @@ casesRouter.put("/:id/hierarchy", async (req, res) => {
 
 
 /**
- * Who may start/complete a team's review step: a member of that team, or a
- * case admin. Only enforced for verified sign-ins — without a token (demo
- * sign-in while AUTH_REQUIRED is off) there's no trustworthy identity to
- * check, so the old behaviour is kept.
+ * Who may start/complete a review step: members of that step's team. The
+ * case-admin step ("Admin" — releasing a case from the admin inbox) needs a
+ * case admin. Case admins get no other review rights from that role. Only
+ * enforced for verified sign-ins — without a token (demo sign-in while
+ * AUTH_REQUIRED is off) there's no trustworthy identity to check.
  */
-async function mayActForTeam(email: string | undefined, team: TeamKey, verified: boolean): Promise<boolean> {
-  if (!verified) return true;
-  if (!email) return false;
-  const user = await prisma.user.findUnique({ where: { email }, include: { memberOf: { include: { team: true } } } });
-  if (!user || !user.active) return false;
-  if (user.role === "admin") return true;
-  const teamName = TEAM_LABELS[team] ?? team;
-  return user.memberOf.some((m: (typeof user.memberOf)[number]) => m.team.name === teamName);
+async function mayActForTeam(req: Request, team: TeamKey): Promise<boolean> {
+  if (!req.auth) return true;
+  const access = await resolveAccess(req);
+  if (team === "Admin") return access.isCaseAdmin;
+  return access.teams.includes(TEAM_LABELS[team] ?? team);
 }
 
 // ─── Business owner marks an assessment complete ────────────────────────────
 
 /**
- * Who may mark a case's assessments complete: its business owner (matched by
- * the email captured at intake, or by name on older cases that predate that),
- * or a case admin acting on their behalf. Same no-token caveat as the rest of
- * this API (ROADMAP #1).
+ * Who may mark a case's assessments complete: its business owner only,
+ * matched by the email captured at intake (or by name on older cases that
+ * predate that). With a verified token the email/name are the token's.
  */
-async function canActForBusinessOwner(c: { businessOwner: string; businessOwnerEmail?: string | null }, email?: string, name?: string) {
+function canActForBusinessOwner(c: { businessOwner: string; businessOwnerEmail?: string | null }, email?: string, name?: string) {
   const e = email?.trim().toLowerCase();
   if (e && c.businessOwnerEmail && e === c.businessOwnerEmail.toLowerCase()) return true;
-  if (!c.businessOwnerEmail && name && name.trim() === c.businessOwner) return true;
-  return isCaseAdminEmail(e);
+  return !c.businessOwnerEmail && !!name && name.trim() === c.businessOwner;
 }
 
 /**
@@ -520,7 +517,7 @@ casesRouter.post("/:id/assessments/:key/:action(complete|reopen)", async (req, r
   const a = c.assessments.find((x: any) => x.key === key);
   if (!a) return res.status(404).json({ error: "Assessment not found on this case" });
   if (!a.applicable) return res.status(409).json({ error: `The ${a.label} isn't required for this case.` });
-  if (!(await canActForBusinessOwner(c, actingEmail, actingName))) {
+  if (!canActForBusinessOwner(c, actingEmail, actingName)) {
     return res.status(403).json({ error: "Only this case's business owner can update its assessments." });
   }
 
