@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Header from "../components/Header";
 import { Case } from "../lib/schema";
 import { currentStateLabel, boCaseBucket } from "../lib/boViewHelpers";
@@ -9,9 +10,11 @@ interface BusinessOwnerSnapshotProps {
   onOpenDashboard: () => void;
   onNewCase?: () => void;
   onLogout?: () => void;
+  /** "View as" picker for people with several VendorTrace roles. */
+  viewSwitcher?: ReactNode;
 }
 
-export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpenDashboard, onNewCase, onLogout }: BusinessOwnerSnapshotProps) {
+export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpenDashboard, onNewCase, onLogout, viewSwitcher }: BusinessOwnerSnapshotProps) {
   const openCases = cases.filter((c) => c.overallStatus !== "completed").length;
   const newCases = cases.filter((c) => boCaseBucket(c) === "new").length;
   const closed = cases.filter((c) => c.overallStatus === "completed").length;
@@ -24,7 +27,7 @@ export default function BusinessOwnerSnapshot({ userName = "Name", cases, onOpen
         title={"Welcome Back, " + userName + " 👋"}
         rightContent={
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ fontSize: 14, opacity: 0.85 }}>Business Owner</span>
+            {viewSwitcher ?? <span style={{ fontSize: 14, opacity: 0.85 }}>Business Owner</span>}
             {onLogout && (
               <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
                 Sign Out

@@ -4,6 +4,7 @@ import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { getProfileForAccount, setAuthUser, UserProfile, UserRole } from "@/lib/auth";
 import { loginRequest } from "@/lib/msalConfig";
 import { fetchMe } from "@/lib/apiClient";
+import { profileFromMe } from "@/lib/profile";
 import { TEAM_LABELS, TeamKey } from "@/lib/schema";
 
 interface Props {
@@ -33,7 +34,6 @@ function demoTeamProfile(teamKey: TeamKey): UserProfile {
     email: `demo.${teamKey.toLowerCase()}@vendortrace.demo`,
     role: "team",
     team: { id: -1, name: TEAM_LABELS[teamKey], memberCount: 1 },
-    isAdmin: false,
   };
 }
 
@@ -101,48 +101,18 @@ export default function Login({ onSuccess }: Props) {
     // has an admin already added them to a team?
     try {
       const me = await fetchMe(email);
-      // "Admin" is the case-admin inbox, not a review team someone works
-      // from day to day — a case admin still signs in to their real team
-      // (e.g. PVM) and reaches the inbox from there.
-      const reviewMemberships = (me.teamMemberships ?? []).filter((m) => m.teamName !== "Admin");
-      if (me.found && reviewMemberships.length > 0) {
-        // Provisioned team member — skip the role picker entirely, go
-        // straight to their team. (If they're on multiple teams, this uses
-        // the first one — switching between several is future work, see
-        // ROADMAP.md.)
-        const membership = reviewMemberships[0];
-        const profile: UserProfile = {
-          accountId,
-          name: me.name ?? name,
-          email: me.email ?? email,
-          role: "team",
-          team: { id: membership.teamId, name: membership.teamName, memberCount: 0 },
-          isAdmin: (me.teamMemberships ?? []).some((m) => m.isAdmin),
-          isCaseAdmin: me.isCaseAdmin === true,
-        };
-        setAuthUser(profile);
-        onSuccess(profile, false);
-        return;
-      }
-      if (me.found && me.isCaseAdmin) {
-        // Case admin with no review team yet — still needs the team view to reach the inbox.
-        const profile: UserProfile = {
-          accountId,
-          name: me.name ?? name,
-          email: me.email ?? email,
-          role: "team",
-          team: { id: -1, name: "Admin", memberCount: 1 },
-          isAdmin: true,
-          isCaseAdmin: true,
-        };
-        setAuthUser(profile);
-        onSuccess(profile, false);
+      // Review teams, case admin and Business Owner can all be held at once;
+      // the header's "View as" picker switches between them.
+      const fromApi = profileFromMe(accountId, name, email, me);
+      if (fromApi) {
+        setAuthUser(fromApi);
+        onSuccess(fromApi, false);
         return;
       }
       // Known email but no team membership yet, OR genuinely unrecognized —
       // either way, default to Business Owner. Anyone in the org can submit
       // a vendor assessment; only team review access is admin-provisioned.
-      const profile: UserProfile = { accountId, name, email, role: "businessOwner" };
+      const profile: UserProfile = { accountId, name, email, role: "businessOwner", isBusinessOwner: true };
       setAuthUser(profile);
       onSuccess(profile, false);
     } catch {

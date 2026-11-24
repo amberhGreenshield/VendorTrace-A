@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
+import { accessFromToken, resolveAccess, syncUserFromToken, tokenManagesRoles } from "../auth/access.js";
 
 export const usersRouter = Router();
 
@@ -11,6 +12,23 @@ export const usersRouter = Router();
  * to Business Owner" rather than an error.
  */
 usersRouter.get("/me", async (req, res) => {
+  // Access managed by Saviynt (app roles in the token): the token is the
+  // source of truth; mirror it into the database and answer from it.
+  if (req.auth && tokenManagesRoles(req.auth)) {
+    const access = accessFromToken(req.auth);
+    const user = await syncUserFromToken(req.auth, access);
+    return res.json({
+      found: true,
+      name: req.auth.name,
+      email: req.auth.email,
+      role: user?.role,
+      isCaseAdmin: access.isCaseAdmin,
+      isBusinessOwner: access.isBusinessOwner,
+      accessManaged: true,
+      teamMemberships: (user?.memberOf ?? []).map((m: any) => ({ teamId: m.teamId, teamName: m.team.name })),
+    });
+  }
+
   // Signed in with a verified token → it's that person, whatever the URL says.
   const email = (req.auth?.email ?? String(req.query.email ?? "")).trim().toLowerCase();
   if (!email) return res.status(400).json({ error: "email is required" });
@@ -30,18 +48,20 @@ usersRouter.get("/me", async (req, res) => {
       include: { memberOf: { include: { team: true } } },
     });
   }
+  const access = await resolveAccess(req, email);
 
   res.json({
     found: true,
     name: user.name,
     email: user.email,
     role: user.role,
-    /** Can view the admin inbox and rearrange case hierarchies — see domain/adminAccess.ts. */
-    isCaseAdmin: user.active && user.role === "admin",
+    /** Sees every open case, reviews new cases and changes review hierarchies — see auth/access.ts. */
+    isCaseAdmin: access.isCaseAdmin,
+    isBusinessOwner: access.isBusinessOwner,
+    accessManaged: false,
     teamMemberships: user.memberOf.map((m: (typeof user.memberOf)[number]) => ({
       teamId: m.teamId,
       teamName: m.team.name,
-      isAdmin: m.isAdmin,
     })),
   });
 });
@@ -56,77 +76,12 @@ usersRouter.get("/teams", async (_req, res) => {
     teams.map((t: (typeof teams)[number]) => ({
       id: t.id,
       name: t.name,
-      members: t.members.map((m: (typeof t.members)[number]) => ({ userId: m.user.id, name: m.user.name, email: m.user.email, isAdmin: m.isAdmin })),
+      members: t.members.map((m: (typeof t.members)[number]) => ({ userId: m.user.id, name: m.user.name, email: m.user.email })),
     }))
   );
 });
 
-/**
- * POST /api/team-members — an admin adds someone (by name+email) to a team.
- * `isAdmin` here is a GLOBAL flag: anyone marked isAdmin on ANY team can add
- * people to ANY team, not just their own — see api/README.md for the
- * reasoning. Creates the User row if this is a brand new email.
- *
- * With a verified sign-in token, the acting admin is the token's user and
- * any `actingAdminEmail` in the body is ignored. Without one (only possible
- * while AUTH_REQUIRED is off, e.g. demo sign-in), the body value is used.
- */
-usersRouter.post("/team-members", async (req, res) => {
-  const body = req.body as {
-    actingAdminEmail?: string;
-    name?: string;
-    email?: string;
-    teamName?: string;
-    isAdmin?: boolean;
-  };
-  const actingAdminEmail = req.auth?.email ?? body.actingAdminEmail;
-  const { name, email, teamName, isAdmin } = body;
-  if (!actingAdminEmail || !name || !email || !teamName) {
-    return res.status(400).json({ error: "actingAdminEmail, name, email, and teamName are all required" });
-  }
-
-  const actingAdmin = await prisma.user.findUnique({
-    where: { email: actingAdminEmail.trim().toLowerCase() },
-    include: { memberOf: true },
-  });
-  const isActingAdmin = actingAdmin?.memberOf.some((m: (typeof actingAdmin.memberOf)[number]) => m.isAdmin) ?? false;
-  if (!isActingAdmin) {
-    return res.status(403).json({ error: "You don't have admin access to add team members." });
-  }
-
-  const team = await prisma.team.findUnique({ where: { name: teamName } });
-  if (!team) return res.status(404).json({ error: `Team "${teamName}" not found` });
-
-  const normalizedEmail = email.trim().toLowerCase();
-  if (!/^[^\s@]+@greenshield\.ca$/.test(normalizedEmail)) {
-    return res.status(400).json({ error: "Enter a GreenShield work email (name@greenshield.ca)." });
-  }
-  const user = await prisma.user.upsert({
-    where: { email: normalizedEmail },
-    update: { name: name.trim() },
-    create: { name: name.trim(), email: normalizedEmail, role: "team_member" },
-  });
-
-  const existing = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: user.id, teamId: team.id } },
-  });
-  // Re-adding someone can promote them to admin, but never silently removes
-  // admin rights they already have (unticked box ≠ "demote").
-  const membership = await prisma.teamMember.upsert({
-    where: { userId_teamId: { userId: user.id, teamId: team.id } },
-    update: isAdmin ? { isAdmin: true } : {},
-    create: { userId: user.id, teamId: team.id, isAdmin: Boolean(isAdmin) },
-  });
-
-  res.status(existing ? 200 : 201).json({
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    teamName: team.name,
-    isAdmin: membership.isAdmin,
-    alreadyMember: Boolean(existing),
-  });
-});
+// Adding people to teams is done in Saviynt (Entra app roles), not in VendorTrace.
 
 //Add the persistence endpoint
 
@@ -156,11 +111,15 @@ usersRouter.post("/me/profile", async (req, res) => {
     });
   }
 
-  // With real sign-in, people can't put themselves on a review team: an
-  // admin adds them (and later Saviynt). Only "Business Owner" is self-service.
+  if (tokenManagesRoles(req.auth)) {
+    return res.status(409).json({ error: "Your VendorTrace access is managed in Saviynt. Request any changes there." });
+  }
+
+  // With real sign-in, people can't put themselves on a review team: that
+  // access comes from Saviynt. Only "Business Owner" is self-service until then.
   if (req.auth && role === "team") {
     return res.status(403).json({
-      error: "Review-team access is set up by the VendorTrace admin. Ask them to add you to your team, then sign in again.",
+      error: "Review-team access is requested through Saviynt. Once it's approved, sign in again.",
     });
   }
 

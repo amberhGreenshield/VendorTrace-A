@@ -17,12 +17,13 @@ import BusinessOwnerSnapshot from "@/pages/BusinessOwnerSnapshot";
 import BusinessOwnerDashboard from "@/pages/BusinessOwnerDashboard";
 import BusinessOwnerCaseDetails from "@/pages/BusinessOwnerCaseDetails";
 import NewCaseIntake from "@/pages/NewCaseIntake";
-import AdminPanel from "@/pages/AdminPanel";
+import ViewSwitcher from "@/components/ViewSwitcher";
+import { profileFromMe, refreshProfile } from "@/lib/profile";
 import AdminInbox from "@/pages/AdminInbox";
 import AdminCaseView from "@/pages/AdminCaseView";
 
 type AuthPage = "login" | "team-select" | "app";
-type TeamPage = "snapshot" | "dashboard" | "caseDetails" | "adminPanel" | "adminInbox" | "adminCase";
+type TeamPage = "snapshot" | "dashboard" | "caseDetails" | "adminInbox" | "adminCase";
 type BoPage = "snapshot" | "dashboard" | "caseDetails" | "newCase";
 
 export default function App() {
@@ -49,20 +50,20 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  // The signed-in profile is cached in localStorage, so admin rights granted
-  // (or removed) after someone's first sign-in would never show up. Re-check
-  // them against the database whenever the app opens. Demo accounts and
-  // business owners without a DB record are left untouched.
+  // The signed-in profile is cached for the session, so roles granted or
+  // removed since (in Saviynt, or the database before that) would never show
+  // up. Re-check them whenever the app opens, keeping the current view if
+  // it's still allowed. Demo accounts unknown to the API are left untouched.
   useEffect(() => {
     if (authPage !== "app" || !authUser?.email) return;
     let cancelled = false;
     fetchMe(authUser.email)
       .then((me) => {
-        if (cancelled || !me.found) return;
-        const isCaseAdmin = me.isCaseAdmin === true;
-        const isAdmin = (me.teamMemberships ?? []).some((m) => m.isAdmin);
-        if (isCaseAdmin === !!authUser.isCaseAdmin && isAdmin === !!authUser.isAdmin) return;
-        const refreshed: UserProfile = { ...authUser, isCaseAdmin, isAdmin };
+        if (cancelled) return;
+        const fresh = profileFromMe(authUser.accountId, authUser.name, authUser.email, me);
+        if (!fresh) return;
+        const refreshed = refreshProfile(authUser, fresh);
+        if (JSON.stringify(refreshed) === JSON.stringify(authUser)) return;
         storeUser(refreshed);
         setAuthUser(refreshed);
       })
@@ -106,6 +107,17 @@ export default function App() {
   const [boPage, setBoPage] = useState<BoPage>("snapshot");
   const [boSelectedCaseId, setBoSelectedCaseId] = useState<string | null>(null);
   const [boJustCreated, setBoJustCreated] = useState<string | null>(null);
+
+  /** "View as" picker: same person, different role (e.g. Business Owner ↔ a review team). */
+  function switchView(next: UserProfile) {
+    storeUser(next);
+    setAuthUser(next);
+    setTeamPage("snapshot");
+    setBoPage("snapshot");
+    setSelectedCaseId(null);
+    setAdminCaseId(null);
+    setBoJustCreated(null);
+  }
 
   function handleLogout() {
     clearAuthUser();
@@ -265,6 +277,7 @@ export default function App() {
     return (
       <BusinessOwnerSnapshot
         userName={authUser?.name ?? "Business Owner"}
+        viewSwitcher={authUser ? <ViewSwitcher profile={authUser} onSwitch={switchView} /> : undefined}
         cases={boCases}
         onOpenDashboard={() => setBoPage("dashboard")}
         onNewCase={() => setBoPage("newCase")}
@@ -297,10 +310,6 @@ export default function App() {
         onOpenCase={(c) => { setAdminCaseId(c.id); setTeamPage("adminCase"); }}
       />
     );
-  }
-
-  if (teamPage === "adminPanel") {
-    return <AdminPanel actingAdminEmail={authUser?.email ?? ""} onBack={() => setTeamPage("snapshot")} />;
   }
 
   if (teamPage === "caseDetails" && selectedCaseId) {
@@ -336,8 +345,8 @@ export default function App() {
       cases={teamViewCases}
       onOpenDashboard={() => setTeamPage("dashboard")}
       onLogout={handleLogout}
-      isAdmin={authUser?.isAdmin}
-      onOpenAdminPanel={authUser?.isAdmin ? () => setTeamPage("adminPanel") : undefined}
+      isCaseAdmin={authUser?.isCaseAdmin}
+      viewSwitcher={authUser ? <ViewSwitcher profile={authUser} onSwitch={switchView} /> : undefined}
       onOpenAdminInbox={authUser?.isCaseAdmin ? () => setTeamPage("adminInbox") : undefined}
       adminInboxCount={
         authUser?.isCaseAdmin

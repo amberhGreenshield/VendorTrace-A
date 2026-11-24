@@ -175,7 +175,11 @@ export interface MeResponse {
   email?: string;
   role?: string;
   isCaseAdmin?: boolean;
-  teamMemberships?: { teamId: number; teamName: string; isAdmin: boolean }[];
+  /** May submit and track vendor assessments. */
+  isBusinessOwner?: boolean;
+  /** True when access comes from Saviynt-managed Entra app roles. */
+  accessManaged?: boolean;
+  teamMemberships?: { teamId: number; teamName: string }[];
 }
 
 export function fetchMe(email: string): Promise<MeResponse> {
@@ -185,25 +189,11 @@ export function fetchMe(email: string): Promise<MeResponse> {
 export interface ApiTeam {
   id: number;
   name: string;
-  members: { userId: number; name: string; email: string; isAdmin: boolean }[];
+  members: { userId: number; name: string; email: string }[];
 }
 
 export function fetchTeams(): Promise<ApiTeam[]> {
   return request<ApiTeam[]>("/api/teams");
-}
-
-export function addTeamMember(params: {
-  actingAdminEmail: string;
-  name: string;
-  email: string;
-  teamName: string;
-  isAdmin?: boolean;
-}): Promise<{ userId: number; name: string; email: string; teamName: string; isAdmin: boolean; alreadyMember?: boolean }> {
-  return request("/api/team-members", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
 }
 
 export function saveMyRole(params: {
